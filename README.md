@@ -1,31 +1,43 @@
 # PayLens — AI Financial Safety & Consequence Engine
 
-PayLens is a financial safety layer for AI agents and automated financial workflows. It helps turn a financial instruction into a deterministic view of balances, upcoming obligations, and protected reserves before a later policy engine decides whether an action is safe, needs review, or should be blocked. AI will explain intent in future phases; it will not be the authority that approves moving money.
+PayLens is a financial safety layer for AI agents and automated financial workflows. Before any future execution step, its deterministic backend establishes the merchant's financial position—balance, obligations, protected reserve, and resulting liquidity—so an AI is never the authority that calculates whether money is safe to move.
 
-## Current architecture
+## Phase 1 status
 
-The Phase 1 backend is an Express and TypeScript API. Thin controllers delegate to an in-memory `FinancialStateService`, which supplies seeded state and deterministic dashboard metrics. No AI, payment provider integration, database, authentication, or execution capability is present.
+Phase 1 provides a deterministic in-memory Financial State Engine using Java 21 and Spring Boot. It has no AI integration, payment execution, database, authentication, or risk/policy decisions.
 
-## Local development
+## Run the backend
 
 ```bash
 cd backend
-npm install
-npm run dev
+./mvnw spring-boot:run
 ```
 
-The API starts on `http://localhost:4000` by default. Copy `.env.example` to `.env` to change configuration.
+On Windows PowerShell:
 
-Other backend commands:
-
-```bash
-npm run typecheck
-npm run build
-npm run start
+```powershell
+cd backend
+.\mvnw.cmd spring-boot:run
 ```
 
-## Backend endpoints
+The server runs on `http://localhost:8080`. Run tests with `./mvnw clean test` (or `.\mvnw.cmd clean test` on Windows).
 
-- `GET /api/health` — service health status.
-- `GET /api/financial-state` — seeded account, transactions, obligations, and reserve.
-- `GET /api/dashboard` — deterministic current balance, obligations total, reserve, and available liquidity.
+## API endpoints
+
+- `GET /api/health`
+- `GET /api/financial-state`
+- `GET /api/dashboard`
+
+Example dashboard response:
+
+```json
+{
+  "currency": "INR",
+  "currentBalance": 840000,
+  "upcomingObligations": 620000,
+  "safetyReserve": 100000,
+  "availableLiquidity": 740000,
+  "remainingAfterObligations": 220000,
+  "safetyBuffer": 120000
+}
+```
