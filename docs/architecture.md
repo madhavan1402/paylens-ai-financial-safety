@@ -54,3 +54,9 @@ Phase 3 separates policy from simulation. `PolicyController` delegates the propo
 Rules are evaluated in strict order: an obligation shortfall blocks first; a negative safety buffer then blocks; a non-negative safety buffer below the required margin requires review; otherwise the action is safe. The required margin is centrally defined by `PolicyThresholds` as one safety reserve. Each decision has deterministic reason and recommendation text.
 
 `POST /api/policy/evaluate` returns `SAFE`, `REVIEW`, or `BLOCK` together with the full simulation that explains the decision. These decisions remain policy outcomes only; no execution occurs.
+
+## AI Intent Agent
+
+Phase 4 introduces an isolated FastAPI agent that extracts structured financial intent from natural language. It provides `POST /api/intent` and uses a deterministic parser whenever no external AI provider is configured, supporting INR, lakh/lac, and k notation. Ambiguous language produces a clarification request rather than invented financial data.
+
+Spring Boot treats every agent response as untrusted. `POST /api/agent/analyze` validates the agent's action type, positive amount, INR currency, and description before passing it to the existing simulation and policy services. The Python agent cannot calculate financial safety, change state, or execute a payment; Spring Boot remains the financial authority.

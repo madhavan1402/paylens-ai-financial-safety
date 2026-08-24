@@ -24,6 +24,12 @@ public class GlobalExceptionHandler {
         return Map.of("error", "Invalid JSON request");
     }
 
+    @ExceptionHandler(IntentAgentUnavailableException.class)
+    @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
+    public Map<String, String> handleIntentAgentUnavailable(IntentAgentUnavailableException exception) {
+        return Map.of("error", "Intent agent is unavailable");
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public Map<String, String> handleIllegalArgument(IllegalArgumentException exception) {

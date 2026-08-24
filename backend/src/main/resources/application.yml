@@ -4,3 +4,7 @@ spring:
 
 server:
   port: 8080
+
+paylens:
+  intent-agent:
+    base-url: ${PAYLENS_INTENT_AGENT_URL:http://localhost:8000}

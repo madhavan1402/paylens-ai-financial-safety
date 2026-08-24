@@ -29,6 +29,8 @@ The server runs on `http://localhost:8080`. Run tests with `./mvnw clean test` (
 - `GET /api/dashboard`
 - `POST /api/simulations`
 - `POST /api/policy/evaluate`
+- `POST /api/agent/analyze`
+- Intent agent: `GET /api/health`, `POST /api/intent` (port 8000)
 
 Example dashboard response:
 
@@ -43,6 +45,21 @@ Example dashboard response:
   "safetyBuffer": 120000
 }
 ```
+
+## AI Intent Agent
+
+Run the isolated deterministic intent agent:
+
+```bash
+cd agents
+python -m venv .venv
+.venv\Scripts\pip install -r requirements.txt
+.venv\Scripts\uvicorn app.main:app --reload --port 8000
+```
+
+`POST /api/intent` accepts `{"message":"Refund ₹2.5 lakh to Rahul"}` and returns validated structured intent. Without an AI API key, its deterministic fallback recognizes common refunds, vendor payments, payroll, tax payments, INR, lakh/lac, and k notation. Ambiguous text asks for clarification rather than guessing.
+
+`POST /api/agent/analyze` sends natural language through that agent, validates the untrusted result in Spring Boot, then returns its simulation and `SAFE`/`REVIEW`/`BLOCK` policy result. It never executes the action.
 
 Example simulation request:
 
