@@ -46,3 +46,11 @@ The simulation returns before and after snapshots, changes to liquidity, obligat
 - After safety buffer = after balance − upcoming obligations − safety reserve.
 
 `POST /api/simulations` accepts a validated action and amount and returns this comparison without changing the authoritative financial state.
+
+## Financial Policy & Risk Engine
+
+Phase 3 separates policy from simulation. `PolicyController` delegates the proposed action to `SimulationService`, then passes the immutable simulation result to `PolicyService`. The policy layer performs no financial calculations, does not mutate state, and never uses an LLM.
+
+Rules are evaluated in strict order: an obligation shortfall blocks first; a negative safety buffer then blocks; a non-negative safety buffer below the required margin requires review; otherwise the action is safe. The required margin is centrally defined by `PolicyThresholds` as one safety reserve. Each decision has deterministic reason and recommendation text.
+
+`POST /api/policy/evaluate` returns `SAFE`, `REVIEW`, or `BLOCK` together with the full simulation that explains the decision. These decisions remain policy outcomes only; no execution occurs.

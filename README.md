@@ -28,6 +28,7 @@ The server runs on `http://localhost:8080`. Run tests with `./mvnw clean test` (
 - `GET /api/financial-state`
 - `GET /api/dashboard`
 - `POST /api/simulations`
+- `POST /api/policy/evaluate`
 
 Example dashboard response:
 
@@ -54,3 +55,21 @@ Example simulation request:
 ```
 
 The simulation is side-effect free. It returns before/after financial snapshots, impacts, and a neutral consequence such as `OBLIGATION_SHORTFALL`; it does not execute the action or make a policy decision.
+
+Policy evaluation uses the same request body and returns a deterministic policy result. A ₹20,000 refund is `SAFE`, a ₹50,000 refund is `REVIEW` because its ₹70,000 after-buffer is below the ₹100,000 required margin, and a ₹250,000 refund is `BLOCK` because it cannot cover ₹620,000 of upcoming obligations.
+
+```json
+{
+  "decision": "BLOCK",
+  "reason": "Action would leave insufficient funds to cover upcoming obligations.",
+  "recommendation": "Reduce the amount or delay the action until additional funds are available.",
+  "simulation": {
+    "after": {
+      "currentBalance": 590000,
+      "remainingAfterObligations": -30000,
+      "safetyBuffer": -130000
+    },
+    "consequence": "OBLIGATION_SHORTFALL"
+  }
+}
+```
