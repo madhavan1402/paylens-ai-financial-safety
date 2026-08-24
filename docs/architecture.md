@@ -33,3 +33,16 @@ All monetary values use `BigDecimal` and the seeded currency is INR. The determi
 - `GET /api/dashboard` returns concise calculated metrics for a future frontend.
 
 Simulation, policy decisions, risk scoring, execution, AI, databases, and authentication are deliberately outside Phase 1.
+
+## Financial Consequence Simulation Engine
+
+Phase 2 adds a separate, side-effect-free simulation layer. `SimulationService` obtains its before-state from `FinancialStateService`, then calculates a hypothetical after-state for outgoing refunds, vendor payments, payroll, or tax payments. It never writes to the repository or executes a payment.
+
+The simulation returns before and after snapshots, changes to liquidity, obligation coverage, and safety buffer, plus neutral financial facts: `NORMAL`, `RESERVE_BREACH`, or `OBLIGATION_SHORTFALL`. These are not policy decisions. The backend, rather than an AI, remains responsible for all monetary calculations.
+
+- After balance = current balance − proposed amount.
+- After available liquidity = after balance − safety reserve.
+- After remaining obligations = after balance − upcoming obligations.
+- After safety buffer = after balance − upcoming obligations − safety reserve.
+
+`POST /api/simulations` accepts a validated action and amount and returns this comparison without changing the authoritative financial state.

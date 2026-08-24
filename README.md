@@ -27,6 +27,7 @@ The server runs on `http://localhost:8080`. Run tests with `./mvnw clean test` (
 - `GET /api/health`
 - `GET /api/financial-state`
 - `GET /api/dashboard`
+- `POST /api/simulations`
 
 Example dashboard response:
 
@@ -41,3 +42,15 @@ Example dashboard response:
   "safetyBuffer": 120000
 }
 ```
+
+Example simulation request:
+
+```json
+{
+  "actionType": "REFUND",
+  "amount": 250000,
+  "description": "Customer refund"
+}
+```
+
+The simulation is side-effect free. It returns before/after financial snapshots, impacts, and a neutral consequence such as `OBLIGATION_SHORTFALL`; it does not execute the action or make a policy decision.
