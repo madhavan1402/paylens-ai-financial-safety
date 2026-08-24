@@ -1,122 +1,46 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
+import { useEffect, useState, type ReactNode } from 'react'
+import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { motion } from 'framer-motion'
+import { AlertTriangle, ArrowRight, Bell, Bot, CheckCircle2, ChevronRight, CircleDollarSign, ClipboardList, CreditCard, Gauge, Landmark, LoaderCircle, Menu, Search, Settings, ShieldCheck, Users, WalletCards, XCircle } from 'lucide-react'
+import { analyzeAction } from './api/agentApi'
+import { getDashboard, getFinancialState } from './api/dashboardApi'
+import type { AgentAnalysisResponse, DashboardResponse, Decision, Snapshot, Transaction } from './types/api'
 import './App.css'
 
-function App() {
-  const [count, setCount] = useState(0)
+const money = (value: number | undefined) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(value ?? 0)
+const labels: Record<string, string> = { currentBalance: 'Current balance', upcomingObligations: 'Upcoming obligations', safetyReserve: 'Safety reserve', availableLiquidity: 'Available liquidity', remainingAfterObligations: 'Remaining after obligations', safetyBuffer: 'Safety buffer' }
+const nav = [['Overview', '/', Gauge], ['Payments', '#', WalletCards], ['Transactions', '/transactions', CreditCard], ['Customers', '/customers', Users], ['Refunds', '#', CircleDollarSign], ['AI SAFETY', '', null], ['Safety Center', '/safety', ShieldCheck], ['Simulations', '/simulations', Landmark], ['Decisions', '/decisions', CheckCircle2], ['Audit Log', '/audit', ClipboardList], ['Settings', '/settings', Settings]] as const
+const prompts = ['Refund ₹2.5 lakh to Rahul', 'Pay ₹80,000 to ABC Suppliers', 'Process payroll ₹3 lakh', 'Pay ₹1 lakh tax']
 
-  return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+function Badge({ value }: { value: Decision }) { const I = value === 'SAFE' ? CheckCircle2 : value === 'REVIEW' ? AlertTriangle : XCircle; return <span className={`badge ${value.toLowerCase()}`}><I size={14}/>{value === 'BLOCK' ? 'BLOCKED' : value}</span> }
+function Loading({ children }: { children: ReactNode }) { return <div className="loading"><LoaderCircle className="spin"/> {children}</div> }
+function Empty({ title, text }: { title: string; text: string }) { return <section className="empty"><ClipboardList size={28}/><h2>{title}</h2><p>{text}</p></section> }
 
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+function Shell({ children }: { children: ReactNode }) {
+  const [open, setOpen] = useState(false); const path = useLocation().pathname; const title = path === '/' ? 'Overview' : path === '/safety' ? 'AI Safety Center' : path.slice(1).replace(/^./, c => c.toUpperCase())
+  return <div className="app-shell"><aside className={`sidebar ${open ? 'open' : ''}`}><div className="brand"><b>P</b>PAYLENS</div><p className="brand-subtitle">Financial safety for autonomous actions.</p><nav>{nav.map(([name, href, Icon]) => Icon ? href === '#' ? <span className="nav-disabled" key={name}><Icon size={18}/>{name}</span> : <NavLink key={name} to={href} onClick={() => setOpen(false)}><Icon size={18}/>{name}</NavLink> : <span className="nav-group" key={name}>{name}</span>)}</nav></aside><main><header><button className="menu-button" onClick={() => setOpen(!open)} aria-label="Toggle navigation"><Menu size={20}/></button><div><p className="eyebrow">PAYLENS OPERATIONS</p><h1>{title}</h1></div><div className="top-actions"><button className="search"><Search size={16}/>Search or command</button><span className="test-mode">Test mode</span><button className="icon-button" aria-label="Notifications"><Bell size={18}/></button><button className="profile">M <span>Merchant</span></button></div></header><div className="page-content">{children}</div></main></div>
 }
 
-export default App
+function Overview() {
+  const [data, setData] = useState<DashboardResponse>(); const [transactions, setTransactions] = useState<Transaction[]>([]); const [error, setError] = useState('')
+  useEffect(() => { Promise.all([getDashboard(), getFinancialState()]).then(([dashboard, state]) => { setData(dashboard); setTransactions(state.transactions) }).catch(() => setError('We could not load the financial overview. Check that the PayLens backend is running.')) }, [])
+  if (error) return <div className="notice error"><XCircle size={18}/>{error}</div>; if (!data) return <Loading>Loading financial overview…</Loading>
+  return <><section className="page-intro"><div><h2>Financial overview</h2><p>A live view of liquidity, obligations, and your protected safety margin.</p></div><NavLink to="/safety" className="primary">Analyze an action <ArrowRight size={16}/></NavLink></section><section className="metric-grid">{Object.entries(labels).map(([key, label]) => { const value = data[key as keyof DashboardResponse] as number; return <article className="metric-card" key={key}><span>{label}</span><strong className={key === 'safetyBuffer' && value < 0 ? 'negative' : ''}>{money(value)}</strong><small>{key === 'safetyBuffer' ? 'After obligations and reserve' : 'Authoritative backend figure'}</small></article> })}</section><section className="two-col"><article className="panel health"><div className="panel-heading"><div><p className="eyebrow">LIQUIDITY POSITION</p><h2>Financial health</h2></div><span className="live-dot">Live data</span></div>{[['Current balance', data.currentBalance], ['Upcoming obligations', data.upcomingObligations], ['Safety reserve', data.safetyReserve], ['Safety buffer', data.safetyBuffer]].map(([name, value]) => <div className="health-row" key={String(name)}><span>{name}</span><i><b style={{width: `${Math.min(100, Math.abs(Number(value)) / data.currentBalance * 100)}%`}}/></i><strong>{money(Number(value))}</strong></div>)}</article><Activity rows={transactions}/></section></>
+}
+function Activity({ rows }: { rows: Transaction[] }) { return <article className="panel activity"><div className="panel-heading"><div><p className="eyebrow">LEDGER</p><h2>Recent financial activity</h2></div><NavLink to="/transactions">View all <ChevronRight size={15}/></NavLink></div>{rows.length ? <table><thead><tr><th>Type</th><th>Amount</th><th>Status</th></tr></thead><tbody>{rows.slice(0, 5).map(t => <tr key={t.id}><td><b>{t.type.replaceAll('_', ' ')}</b><small>{t.description}</small></td><td>{money(t.amount)}</td><td><span className="table-status">{t.status}</span></td></tr>)}</tbody></table> : <p className="muted">No transaction activity is available.</p>}</article> }
+
+function Safety() {
+  const [message, setMessage] = useState(prompts[0]); const [result, setResult] = useState<AgentAnalysisResponse>(); const [loading, setLoading] = useState(false); const [error, setError] = useState('')
+  async function submit(e: React.FormEvent) { e.preventDefault(); if (!message.trim()) return; setLoading(true); setError(''); setResult(undefined); try { setResult(await analyzeAction(message)) } catch { setError('Analysis is temporarily unavailable. Your financial state has not been changed.') } finally { setLoading(false) } }
+  return <><section className="safety-hero"><p className="eyebrow">AI SAFETY CENTER</p><h2>Analyze financial actions before they happen.</h2><p>Validate intent, simulate impact, and apply your configured safety policy.</p><form className="command" onSubmit={submit}><label htmlFor="command">What would you like to do?</label><textarea id="command" value={message} onChange={e => setMessage(e.target.value)}/><button className="primary" disabled={loading}>{loading ? <LoaderCircle className="spin" size={17}/> : <Bot size={17}/>}Analyze action</button></form><div className="chips">{prompts.map(x => <button key={x} onClick={() => setMessage(x)}>{x}</button>)}</div></section>{loading && <Loading>Analyzing your request…</Loading>}{error && <div className="notice error"><XCircle size={18}/>{error}</div>}{result && <Result value={result}/>}</>
+}
+function SnapshotCard({ title, data }: { title: string; data: Snapshot }) { return <article className="snapshot"><p className="eyebrow">{title}</p>{(['currentBalance', 'upcomingObligations', 'safetyBuffer'] as const).map(k => <div key={k}><span>{labels[k]}</span><b className={k === 'safetyBuffer' && data[k] < 0 ? 'negative' : ''}>{money(data[k])}</b></div>)}</article> }
+function Result({ value }: { value: AgentAnalysisResponse }) {
+  if (value.status === 'NEEDS_CLARIFICATION') return <div className="notice clarification"><AlertTriangle size={22}/><div><h2>More information needed</h2><p>{value.clarificationMessage ?? `Please provide: ${value.missingFields.join(', ')}`}</p></div></div>
+  if (value.status === 'INVALID' || !value.intent || !value.simulation || !value.policy) return <div className="notice error"><XCircle size={22}/><div><h2>PayLens couldn't understand that financial action.</h2><p>{value.clarificationMessage ?? 'Try one of the examples above.'}</p></div></div>
+  const { intent, simulation, policy, explanation } = value
+  return <motion.section initial={{opacity: 0, y: 12}} animate={{opacity: 1, y: 0}} className="analysis-result"><div className="result-grid"><article className="panel"><p className="eyebrow">AI INTERPRETATION</p><h2>{intent.actionType.replaceAll('_', ' ')}</h2><dl><div><dt>Amount</dt><dd>{money(intent.amount)}</dd></div><div><dt>Target</dt><dd>{intent.target ?? 'Not specified'}</dd></div><div><dt>Currency</dt><dd>{intent.currency}</dd></div></dl></article><article className={`decision-panel ${policy.decision.toLowerCase()}`}><p className="eyebrow">SAFETY DECISION</p><Badge value={policy.decision}/><h2>{policy.decision === 'SAFE' ? 'Action satisfies the current safety policy.' : policy.decision === 'REVIEW' ? 'Human review required' : 'Action cannot proceed safely.'}</h2><p>{policy.reason}</p></article></div><article className="panel"><p className="eyebrow">AUTHORITATIVE SIMULATION</p><h2>Before and after</h2><div className="comparison"><SnapshotCard title="Before" data={simulation.before}/><ArrowRight className="comparison-arrow"/><SnapshotCard title="After" data={simulation.after}/></div></article><div className="result-grid lower"><article className="panel"><p className="eyebrow">WHY PAYLENS DECIDED THIS</p><h2>Policy evaluation</h2><p className="policy-reason">{policy.reason}</p><h3>Recommendation</h3><p>{policy.recommendation}</p></article><article className="panel"><p className="eyebrow">FINANCIAL IMPACT</p><h2>Simulated change</h2><dl><div><dt>Liquidity change</dt><dd>{money(simulation.impact.liquidityChange)}</dd></div><div><dt>Safety buffer change</dt><dd>{money(simulation.impact.safetyBufferChange)}</dd></div><div><dt>Reserve breached</dt><dd>{simulation.impact.reserveBreached ? 'Yes' : 'No'}</dd></div><div><dt>Obligations covered</dt><dd>{simulation.impact.obligationsCovered ? 'Yes' : 'No'}</dd></div></dl></article></div>{explanation && <article className="panel explanation"><div><p className="eyebrow">AI EXPLANATION</p><h2>{explanation.headline}</h2><p>{explanation.explanation}</p></div><div><h3>Key factors</h3><ul>{explanation.keyFactors.map(x => <li key={x}>{x}</li>)}</ul><h3>Recommendation</h3><p>{explanation.recommendation}</p><span className="provider">Provider: {explanation.providerMode}</span></div></article>}</motion.section>
+}
+function Transactions() { const [rows, setRows] = useState<Transaction[]>(); useEffect(() => { getFinancialState().then(x => setRows(x.transactions)).catch(() => setRows([])) }, []); if (!rows) return <Loading>Loading transactions…</Loading>; return <article className="panel full-table"><p className="eyebrow">LEDGER</p><h2>Transactions</h2>{rows.length ? <table><thead><tr><th>ID</th><th>Type</th><th>Description</th><th>Amount</th><th>Timestamp</th><th>Status</th></tr></thead><tbody>{rows.map(t => <tr key={t.id}><td>{t.id}</td><td>{t.type}</td><td>{t.description}</td><td>{money(t.amount)}</td><td>{new Date(t.timestamp).toLocaleDateString('en-IN')}</td><td><span className="table-status">{t.status}</span></td></tr>)}</tbody></table> : <Empty title="No transactions" text="No transaction data is available from the financial state service."/>}</article> }
+function Placeholder({ type }: { type: string }) { const copy: Record<string, [string, string]> = { simulations: ['No simulation history yet', 'Run an analysis from the AI Safety Center to see financial simulations here.'], decisions: ['No safety decisions yet', 'Decision history will appear here when a history API is available.'], customers: ['Customer intelligence will appear here when connected.', 'PayLens does not currently have a customer data source.'], audit: ['Audit log coming in a future phase', 'No audit records are fabricated in this interface.'], settings: ['System settings', 'Environment and provider status are managed by the backend.'] }; return <Empty title={copy[type][0]} text={copy[type][1]}/> }
+export default function App() { return <Shell><Routes><Route path="/" element={<Overview/>}/><Route path="/safety" element={<Safety/>}/><Route path="/transactions" element={<Transactions/>}/>{['simulations', 'decisions', 'customers', 'audit', 'settings'].map(x => <Route key={x} path={`/${x}`} element={<Placeholder type={x}/>}/>)}<Route path="*" element={<Navigate to="/" replace/>}/></Routes></Shell> }

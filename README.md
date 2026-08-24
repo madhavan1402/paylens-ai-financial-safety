@@ -72,6 +72,18 @@ The default provider is deterministic and works without an API key. An optional 
 - `REVIEW`: “Human review required” — obligations are covered but the safety margin is reduced.
 - `SAFE`: “Action appears financially safe” — obligation coverage and safety margin are preserved.
 
+## Frontend command center
+
+The React/Vite frontend is a responsive PayLens operations dashboard. It reads live metrics from Spring Boot, displays financial-state transaction data, and sends natural-language actions only to `POST /api/agent/analyze`.
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Set `VITE_API_BASE_URL=http://localhost:8080` in `frontend/.env` (see `.env.example`). Main routes are `/` (Overview), `/safety` (AI Safety Center), `/transactions`, `/simulations`, `/decisions`, `/customers`, `/audit`, and `/settings`. The UI presents authoritative simulation, policy, and explanation data only; it contains no execution capability.
+
 Example simulation request:
 
 ```json

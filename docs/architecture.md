@@ -63,4 +63,8 @@ Spring Boot treats every agent response as untrusted. `POST /api/agent/analyze` 
 
 ## AI Consequence & Explanation Agent
 
+## Frontend Architecture
+
+The Phase 6 React application is a presentation layer with a persistent operations shell and routes for overview, AI Safety Center, transactions, and scoped empty states. Axios calls the Spring Boot API using `VITE_API_BASE_URL`; the browser never calls Python agents directly. The flow is React UI to Spring Boot API to intent/explanation agents and deterministic simulation/policy services. The Overview reads `/api/dashboard` and `/api/financial-state`; the Safety Center sends only a natural-language message to `/api/agent/analyze` and renders the returned authoritative intent, simulation, policy, and explanation. Local CORS is limited to the Vite development origin.
+
 Phase 5 places the explanation agent after `PolicyService`: validated intent → simulation facts → policy decision → explanation. Spring Boot constructs this structured payload, so a client cannot submit facts as authoritative. The deterministic FastAPI provider formats only supplied values and policy text; it has no balance, risk, execution, or policy capability. A future optional LLM provider is constrained to explain the same facts and its output is validated. If it is unavailable, invalid, or returns another decision, Spring Boot uses a local deterministic fallback. Thus the explanation layer cannot override `PolicyService` or affect financial state.
