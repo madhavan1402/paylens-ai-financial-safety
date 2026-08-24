@@ -30,7 +30,8 @@ The server runs on `http://localhost:8080`. Run tests with `./mvnw clean test` (
 - `POST /api/simulations`
 - `POST /api/policy/evaluate`
 - `POST /api/agent/analyze`
-- Intent agent: `GET /api/health`, `POST /api/intent` (port 8000)
+- `POST /api/agent/explain` (runs the same authoritative analysis flow and includes an explanation)
+- Python agent: `GET /api/health`, `POST /api/intent`, `POST /api/explain` (port 8000)
 
 Example dashboard response:
 
@@ -60,6 +61,16 @@ python -m venv .venv
 `POST /api/intent` accepts `{"message":"Refund ₹2.5 lakh to Rahul"}` and returns validated structured intent. Without an AI API key, its deterministic fallback recognizes common refunds, vendor payments, payroll, tax payments, INR, lakh/lac, and k notation. Ambiguous text asks for clarification rather than guessing.
 
 `POST /api/agent/analyze` sends natural language through that agent, validates the untrusted result in Spring Boot, then returns its simulation and `SAFE`/`REVIEW`/`BLOCK` policy result. It never executes the action.
+
+## AI Consequence & Explanation Agent
+
+Phase 5 adds a downstream explanation layer. Spring Boot alone constructs the structured explanation request from the validated intent, authoritative simulation, and authoritative policy result. The FastAPI endpoint never receives client-supplied financial facts.
+
+The default provider is deterministic and works without an API key. An optional LLM provider is intentionally isolated behind a provider seam and must preserve the supplied decision and facts. Spring Boot checks the response decision; an unavailable or mismatched response falls back to its local deterministic explanation, without affecting `SAFE`, `REVIEW`, or `BLOCK`.
+
+- `BLOCK`: “Refund blocked” — insufficient funds for upcoming obligations.
+- `REVIEW`: “Human review required” — obligations are covered but the safety margin is reduced.
+- `SAFE`: “Action appears financially safe” — obligation coverage and safety margin are preserved.
 
 Example simulation request:
 

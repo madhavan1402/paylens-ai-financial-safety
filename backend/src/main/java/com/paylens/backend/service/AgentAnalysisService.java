@@ -21,13 +21,18 @@ public class AgentAnalysisService {
     private final IntentAgentClient intentAgentClient;
     private final SimulationService simulationService;
     private final PolicyService policyService;
+    private final ExplanationAgentClient explanationAgentClient;
+    private final DeterministicExplanationService deterministicExplanationService;
     private final Validator validator;
 
     public AgentAnalysisService(IntentAgentClient intentAgentClient, SimulationService simulationService,
-            PolicyService policyService, Validator validator) {
+            PolicyService policyService, ExplanationAgentClient explanationAgentClient,
+            DeterministicExplanationService deterministicExplanationService, Validator validator) {
         this.intentAgentClient = intentAgentClient;
         this.simulationService = simulationService;
         this.policyService = policyService;
+        this.explanationAgentClient = explanationAgentClient;
+        this.deterministicExplanationService = deterministicExplanationService;
         this.validator = validator;
     }
 
@@ -43,7 +48,11 @@ public class AgentAnalysisService {
         SimulationRequest action = validatedAction(agentResponse.intent());
         var simulation = simulationService.simulate(action);
         var policy = policyService.evaluate(simulation);
-        return response(request.message(), agentResponse, simulation, policy);
+        var explanationPolicy = new com.paylens.backend.dto.ExplanationPolicyFacts(
+                policy.decision(), policy.reason(), policy.recommendation());
+        var explanationRequest = new com.paylens.backend.dto.ExplanationAgentRequest(
+                request.message(), agentResponse.intent(), simulation, explanationPolicy);
+        return response(request.message(), agentResponse, simulation, policy, explanation(explanationRequest));
     }
 
     private SimulationRequest validatedAction(AgentFinancialIntent intent) {
@@ -70,8 +79,25 @@ public class AgentAnalysisService {
     private AgentAnalysisResponse response(String message, IntentAgentResponse intentResponse,
             com.paylens.backend.dto.SimulationResult simulation,
             com.paylens.backend.dto.PolicyEvaluationResult policy) {
+        return response(message, intentResponse, simulation, policy, null);
+    }
+
+    private AgentAnalysisResponse response(String message, IntentAgentResponse intentResponse,
+            com.paylens.backend.dto.SimulationResult simulation,
+            com.paylens.backend.dto.PolicyEvaluationResult policy,
+            com.paylens.backend.dto.ExplanationResponse explanation) {
         return new AgentAnalysisResponse(message, intentResponse.status(), intentResponse.intent(),
                 intentResponse.missingFields() == null ? List.of() : intentResponse.missingFields(),
-                intentResponse.message(), simulation, policy);
+                intentResponse.message(), simulation, policy, explanation);
+    }
+
+    private com.paylens.backend.dto.ExplanationResponse explanation(com.paylens.backend.dto.ExplanationAgentRequest request) {
+        try {
+            var response = explanationAgentClient.explain(request);
+            if (response.decision() == request.policy().decision() && "SUCCESS".equals(response.status())) return response;
+        } catch (RuntimeException ignored) {
+            // Explanation failure must never affect the authoritative financial decision.
+        }
+        return deterministicExplanationService.explain(request);
     }
 }

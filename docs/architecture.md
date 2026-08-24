@@ -60,3 +60,7 @@ Rules are evaluated in strict order: an obligation shortfall blocks first; a neg
 Phase 4 introduces an isolated FastAPI agent that extracts structured financial intent from natural language. It provides `POST /api/intent` and uses a deterministic parser whenever no external AI provider is configured, supporting INR, lakh/lac, and k notation. Ambiguous language produces a clarification request rather than invented financial data.
 
 Spring Boot treats every agent response as untrusted. `POST /api/agent/analyze` validates the agent's action type, positive amount, INR currency, and description before passing it to the existing simulation and policy services. The Python agent cannot calculate financial safety, change state, or execute a payment; Spring Boot remains the financial authority.
+
+## AI Consequence & Explanation Agent
+
+Phase 5 places the explanation agent after `PolicyService`: validated intent → simulation facts → policy decision → explanation. Spring Boot constructs this structured payload, so a client cannot submit facts as authoritative. The deterministic FastAPI provider formats only supplied values and policy text; it has no balance, risk, execution, or policy capability. A future optional LLM provider is constrained to explain the same facts and its output is validated. If it is unavailable, invalid, or returns another decision, Spring Boot uses a local deterministic fallback. Thus the explanation layer cannot override `PolicyService` or affect financial state.

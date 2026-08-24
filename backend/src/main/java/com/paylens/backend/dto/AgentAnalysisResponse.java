@@ -9,5 +9,6 @@ public record AgentAnalysisResponse(
         List<String> missingFields,
         String clarificationMessage,
         SimulationResult simulation,
-        PolicyEvaluationResult policy) {
+        PolicyEvaluationResult policy,
+        ExplanationResponse explanation) {
 }

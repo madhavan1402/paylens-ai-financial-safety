@@ -9,6 +9,8 @@ import com.paylens.backend.dto.AgentFinancialIntent;
 import com.paylens.backend.dto.IntentAgentResponse;
 import com.paylens.backend.repository.InMemoryFinancialStateRepository;
 import com.paylens.backend.service.AgentAnalysisService;
+import com.paylens.backend.service.DeterministicExplanationService;
+import com.paylens.backend.service.ExplanationAgentClient;
 import com.paylens.backend.service.FinancialStateService;
 import com.paylens.backend.service.IntentAgentClient;
 import com.paylens.backend.service.PolicyService;
@@ -28,7 +30,8 @@ import org.springframework.test.web.servlet.MockMvc;
 @WebMvcTest(AgentAnalysisController.class)
 @Import({
         AgentAnalysisService.class, SimulationService.class, PolicyService.class, PolicyThresholds.class,
-        FinancialStateService.class, InMemoryFinancialStateRepository.class, AgentAnalysisControllerTest.AgentClientConfig.class
+        FinancialStateService.class, InMemoryFinancialStateRepository.class, DeterministicExplanationService.class,
+        AgentAnalysisControllerTest.AgentClientConfig.class
 })
 class AgentAnalysisControllerTest {
     @Autowired
@@ -58,7 +61,8 @@ class AgentAnalysisControllerTest {
         mockMvc.perform(request(message))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value(intentStatus))
-                .andExpect(jsonPath("$.policy.decision").value(decision));
+                .andExpect(jsonPath("$.policy.decision").value(decision))
+                .andExpect(jsonPath("$.explanation.decision").value(decision));
     }
 
     private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder request(String message) {
@@ -79,6 +83,11 @@ class AgentAnalysisControllerTest {
                 case "review" -> validIntent("50000");
                 default -> validIntent("250000");
             };
+        }
+
+        @Bean
+        ExplanationAgentClient explanationAgentClient() {
+            return request -> { throw new IllegalStateException("agent unavailable"); };
         }
 
         private IntentAgentResponse validIntent(String amount) {

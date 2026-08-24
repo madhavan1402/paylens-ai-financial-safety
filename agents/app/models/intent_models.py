@@ -1,7 +1,7 @@
 from decimal import Decimal
 from enum import StrEnum
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class ActionType(StrEnum):
@@ -18,6 +18,7 @@ class IntentStatus(StrEnum):
 
 
 class FinancialIntent(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     actionType: ActionType
     amount: Decimal = Field(gt=Decimal("0"))
     currency: str = "INR"

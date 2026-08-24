@@ -22,4 +22,9 @@ public class AgentAnalysisController {
     public AgentAnalysisResponse analyze(@Valid @RequestBody AgentAnalyzeRequest request) {
         return agentAnalysisService.analyze(request);
     }
+
+    @PostMapping("/explain")
+    public AgentAnalysisResponse explain(@Valid @RequestBody AgentAnalyzeRequest request) {
+        return agentAnalysisService.analyze(request);
+    }
 }
