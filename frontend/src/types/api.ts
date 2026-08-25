@@ -229,3 +229,142 @@ export interface ReliabilityMetrics {
   successRate: number;
 }
 
+export type FinancialHealthStatus = 'HEALTHY' | 'CAUTION' | 'AT_RISK' | 'CRITICAL';
+
+export type ObligationRiskLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+
+export type RiskSignalType =
+  | 'LOW_LIQUIDITY'
+  | 'SAFETY_BUFFER_PRESSURE'
+  | 'UPCOMING_OBLIGATION'
+  | 'HIGH_OBLIGATION_CONCENTRATION'
+  | 'EXECUTION_FAILURE'
+  | 'RECONCILIATION_REQUIRED'
+  | 'UNKNOWN_EXECUTION'
+  | 'REVENUE_AT_RISK';
+
+export type RiskSeverity = 'INFO' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+
+export type ForecastConfidence = 'HIGH' | 'MEDIUM' | 'LOW';
+
+export type ForecastDataQuality = 'SUFFICIENT_HISTORY' | 'LIMITED_HISTORY' | 'INSUFFICIENT_HISTORY';
+
+export interface FinancialHealthResponse {
+  currentBalance: number;
+  availableLiquidity: number;
+  unpaidObligations: number;
+  safetyReserve: number;
+  remainingAfterObligations: number;
+  safetyBuffer: number;
+  healthStatus: FinancialHealthStatus;
+  healthScore: number;
+  calculatedAt: string;
+}
+
+export interface CashFlowPoint {
+  date: string;
+  inflow: number;
+  outflow: number;
+  netFlow: number;
+  balance: number;
+}
+
+export interface CashFlowResponse {
+  period: string;
+  points: CashFlowPoint[];
+  dataQualityMessage: string;
+}
+
+export interface ObligationRiskItem {
+  id: string;
+  type: string;
+  description: string;
+  amount: number;
+  dueDate: string;
+  status: string;
+  daysUntilDue: number;
+  riskLevel: ObligationRiskLevel;
+}
+
+export interface ObligationsRiskResponse {
+  obligations: ObligationRiskItem[];
+  totalUpcomingAmount: number;
+}
+
+export interface LiquidityForecastDay {
+  date: string;
+  dayIndex: number;
+  projectedBalance: number;
+  projectedSafetyBuffer: number;
+  scheduledOutflows: number;
+  projectedInflows: number;
+}
+
+export interface LiquidityForecastResponse {
+  forecastDays: number;
+  startingBalance: number;
+  projectedInflows: number;
+  projectedOutflows: number;
+  projectedEndingBalance: number;
+  projectedSafetyBuffer: number;
+  confidence: ForecastConfidence;
+  dataQuality: ForecastDataQuality;
+  assumptions: string[];
+  forecastDaysList: LiquidityForecastDay[];
+}
+
+export interface RiskSignal {
+  signalId: string;
+  type: RiskSignalType;
+  severity: RiskSeverity;
+  title: string;
+  description: string;
+  detectedAt: string;
+  relatedEntityId?: string;
+  recommendedAction: string;
+}
+
+export interface RiskSignalsResponse {
+  signals: RiskSignal[];
+  totalCount: number;
+  criticalCount: number;
+}
+
+export interface RevenueAtRiskResponse {
+  totalAmount: number;
+  caseCount: number;
+  highPriorityAmount: number;
+  dataStatus: string;
+  calculatedAt: string;
+}
+
+export interface ForecastScenarioRequest {
+  actionType: string;
+  amount: number;
+  currency?: string;
+  target?: string;
+}
+
+export interface ForecastScenarioResponse {
+  actionType: string;
+  amount: number;
+  policyDecision: 'SAFE' | 'REVIEW' | 'BLOCK';
+  currentSafetyBuffer: number;
+  projectedSafetyBuffer: number;
+  safetyBufferImpact: number;
+  currentHealthStatus: FinancialHealthStatus;
+  projectedHealthStatus: FinancialHealthStatus;
+  consequenceSummary: string;
+  preservesFullMargin: boolean;
+}
+
+export interface IntelligenceSummaryResponse {
+  health: FinancialHealthResponse;
+  forecast: LiquidityForecastResponse;
+  topObligations: ObligationRiskItem[];
+  activeSignals: RiskSignal[];
+  revenueAtRisk: RevenueAtRiskResponse;
+  calculatedAt: string;
+}
+
+

@@ -2,19 +2,21 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
-  AlertTriangle, Bell, Bot, CheckCircle2,
+  AlertTriangle, Bell, Bot, Calendar, CheckCircle2,
   CircleDollarSign, ClipboardList, CreditCard, Gauge, Landmark, LoaderCircle,
-  Menu, RefreshCw, Search, Settings, ShieldCheck, Users, WalletCards, XCircle, X, Zap, Info
+  Menu, RefreshCw, Search, Settings, ShieldCheck, Sliders, TrendingUp, Users, WalletCards, XCircle, X, Zap, Info
 } from 'lucide-react'
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { analyzeAction } from './api/agentApi'
 import { getDashboard, getFinancialState } from './api/dashboardApi'
 import { getAuditEvents, getDecisionDetail, getDecisions } from './api/decisionsApi'
 import { executeDecision, getDecisionExecution, getExecutionDetail, getExecutions } from './api/executionsApi'
 import { getReconciliationHistory, getReliabilityMetrics, triggerReconciliation } from './api/reconciliationsApi'
+import { getIntelligenceSummary, getObligationRisks, getRiskSignals, simulateForecastScenario } from './api/intelligenceApi'
 import type {
-  AgentAnalysisResponse, AuditEvent, DashboardResponse, Decision,
-  DecisionDetail, DecisionSummary, ExecutionResponse, ExecutionStatus, ExecutionSummary, FinancialStateResponse, GovernanceStatus,
-  ReconciliationStatus, ReconciliationSummary, ReliabilityMetrics, Transaction
+  AgentAnalysisResponse, AuditEvent, DashboardResponse,
+  DecisionDetail, DecisionSummary, ExecutionResponse, ExecutionSummary, FinancialStateResponse, ForecastScenarioResponse, GovernanceStatus,
+  IntelligenceSummaryResponse, ObligationRiskItem, ReconciliationSummary, ReliabilityMetrics, RiskSignal, Transaction
 } from './types/api'
 import './App.css'
 
@@ -36,6 +38,10 @@ const nav = [
   ['Transactions', '/transactions', CreditCard],
   ['Customers', '/customers', Users],
   ['Refunds', '#', CircleDollarSign],
+  ['FINANCIAL INTELLIGENCE', '', null],
+  ['Obligations', '/obligations', Calendar],
+  ['Risk Center', '/risk', AlertTriangle],
+  ['Scenario Simulator', '/simulator', Sliders],
   ['AI SAFETY', '', null],
   ['Safety Center', '/safety', ShieldCheck],
   ['Simulations', '/simulations', Landmark],
@@ -48,8 +54,8 @@ const nav = [
 
 const prompts = ['Refund ₹2.5 lakh to Rahul', 'Pay ₹80,000 to ABC Suppliers', 'Process payroll ₹3 lakh', 'Pay ₹1 lakh tax']
 
-function StatusBadge({ value }: { value: GovernanceStatus | Decision | ExecutionStatus | ReconciliationStatus }) {
-  const isSafe = value === 'SAFE' || value === 'APPROVED' || value === 'SUCCEEDED' || value === 'CONFIRMED'
+function StatusBadge({ value }: { value: string }) {
+  const isSafe = value === 'SAFE' || value === 'APPROVED' || value === 'SUCCEEDED' || value === 'CONFIRMED' || value === 'HEALTHY'
   const isReview = value === 'PENDING_REVIEW' || value === 'REVIEW' || value === 'REQUESTED' || value === 'PROCESSING' || value === 'PENDING' || value === 'MANUAL_REVIEW_REQUIRED'
   const Icon = isSafe ? CheckCircle2 : isReview ? AlertTriangle : XCircle
   const displayLabel = value === 'REVIEW' ? 'PENDING REVIEW' : value.replace(/_/g, ' ')
@@ -247,16 +253,74 @@ function ExecutionModal({
 function OverviewPage() {
   const [data, setData] = useState<DashboardResponse | null>(null)
   const [state, setState] = useState<FinancialStateResponse | null>(null)
+  const [intel, setIntel] = useState<IntelligenceSummaryResponse | null>(null)
 
   useEffect(() => {
     getDashboard().then(setData).catch(console.error)
     getFinancialState().then(setState).catch(console.error)
+    getIntelligenceSummary().then(setIntel).catch(console.error)
   }, [])
 
   if (!data || !state) return <Loading>Loading dashboard metrics...</Loading>
 
+  const forecastChartData = intel?.forecast.forecastDaysList.map(d => ({
+    date: d.date.slice(5),
+    balance: d.projectedBalance,
+    buffer: d.projectedSafetyBuffer
+  })) || []
+
   return (
     <>
+      {intel && (
+        <div className="card" style={{ marginBottom: '1.5rem', background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.8), rgba(15, 23, 42, 0.95))', border: '1px solid var(--border)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.25rem', alignItems: 'center' }}>
+            <div>
+              <p className="eyebrow">FINANCIAL HEALTH SCORE</p>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem', marginTop: '0.25rem' }}>
+                <span style={{ fontSize: '2.5rem', fontWeight: 800, color: intel.health.healthScore >= 80 ? '#22c55e' : intel.health.healthScore >= 60 ? '#eab308' : '#ef4444' }}>
+                  {intel.health.healthScore}
+                </span>
+                <span style={{ color: 'var(--muted)', fontSize: '1.1rem' }}>/ 100</span>
+                <StatusBadge value={intel.health.healthStatus} />
+              </div>
+            </div>
+            <div>
+              <p className="eyebrow">SAFETY BUFFER</p>
+              <h3 style={{ fontSize: '1.4rem', color: 'var(--primary)', margin: '0.25rem 0' }}>{money(intel.health.safetyBuffer)}</h3>
+              <p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Reserve margin: {money(intel.health.safetyReserve)}</p>
+            </div>
+            <div>
+              <p className="eyebrow">REVENUE AT RISK</p>
+              <h3 style={{ fontSize: '1.4rem', color: intel.revenueAtRisk.totalAmount > 0 ? '#ef4444' : '#22c55e', margin: '0.25rem 0' }}>
+                {money(intel.revenueAtRisk.totalAmount)}
+              </h3>
+              <p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>{intel.revenueAtRisk.caseCount} unconfirmed / failed execution(s)</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {intel && intel.activeSignals.length > 0 && (
+        <div className="card" style={{ marginBottom: '1.5rem', borderLeft: '4px solid #eab308' }}>
+          <div className="card-header" style={{ marginBottom: '0.5rem' }}>
+            <h3 style={{ fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#eab308' }}>
+              <AlertTriangle size={18} /> ACTIVE FINANCIAL RISK SIGNALS ({intel.activeSignals.length})
+            </h3>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            {intel.activeSignals.slice(0, 2).map(s => (
+              <div key={s.signalId} style={{ background: 'var(--panel-light)', padding: '0.75rem 1rem', borderRadius: '6px', fontSize: '0.85rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                  <strong>{s.title}</strong>
+                  <span className={`badge ${s.severity === 'HIGH' || s.severity === 'CRITICAL' ? 'blocked' : 'review'}`}>{s.severity}</span>
+                </div>
+                <p style={{ margin: 0, color: 'var(--muted)' }}>{s.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="metrics-grid">
         {Object.entries(data).filter(([k]) => k !== 'currency').map(([k, v]) => (
           <div className="metric-card" key={k}>
@@ -265,6 +329,33 @@ function OverviewPage() {
           </div>
         ))}
       </div>
+
+      {forecastChartData.length > 0 && (
+        <div className="card" style={{ marginBottom: '1.5rem' }}>
+          <div className="card-header">
+            <h2 className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <TrendingUp size={18} style={{ color: 'var(--primary)' }} /> 7-Day Liquidity & Safety Buffer Forecast
+            </h2>
+            <span className="badge" style={{ fontSize: '0.7rem' }}>Confidence: {intel?.forecast.confidence}</span>
+          </div>
+          <div style={{ width: '100%', height: 220, marginTop: '1rem' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={forecastChartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis dataKey="date" stroke="var(--muted)" fontSize={12} />
+                <YAxis stroke="var(--muted)" fontSize={12} tickFormatter={val => `₹${val/1000}k`} />
+                <Tooltip formatter={(value: any) => money(Number(value))} contentStyle={{ background: '#0f172a', border: '1px solid var(--border)', borderRadius: '8px' }} />
+                <Area type="monotone" dataKey="balance" name="Projected Balance" stroke="#00f2fe" fill="rgba(0, 242, 254, 0.15)" />
+                <Area type="monotone" dataKey="buffer" name="Projected Safety Buffer" stroke="#3b82f6" fill="rgba(59, 130, 246, 0.15)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+          <p style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '0.5rem', fontStyle: 'italic' }}>
+            Note: {intel?.forecast.assumptions[0]} {intel?.forecast.assumptions[1]}
+          </p>
+        </div>
+      )}
+
       <div className="card">
         <div className="card-header"><h2 className="card-title">Recent Financial State Transactions</h2></div>
         <div className="table-container">
@@ -807,6 +898,204 @@ function ReconciliationsPage() {
   )
 }
 
+function ObligationsPage() {
+  const [data, setData] = useState<ObligationRiskItem[]>([])
+  const [total, setTotal] = useState(0)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    getObligationRisks()
+      .then(res => {
+        setData(res.obligations)
+        setTotal(res.totalUpcomingAmount)
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false))
+  }, [])
+
+  if (loading) return <Loading>Loading obligations risk analysis...</Loading>
+
+  return (
+    <>
+      <div className="card" style={{ marginBottom: '1.5rem' }}>
+        <div className="card-header">
+          <h2 className="card-title">Merchant Unpaid Obligations Summary</h2>
+          <span className="badge" style={{ fontSize: '0.85rem', background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444' }}>
+            Total Upcoming: {money(total)}
+          </span>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="table-container">
+          <table>
+            <thead>
+              <tr><th>ID</th><th>Category</th><th>Description</th><th>Amount</th><th>Due Date</th><th>Days Remaining</th><th>Risk Level</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+              {data.map(o => (
+                <tr key={o.id}>
+                  <td><code>{o.id}</code></td>
+                  <td>{o.type}</td>
+                  <td>{o.description}</td>
+                  <td><strong>{money(o.amount)}</strong></td>
+                  <td>{o.dueDate}</td>
+                  <td><strong>{o.daysUntilDue} day(s)</strong></td>
+                  <td>
+                    <span className={`badge ${o.riskLevel === 'CRITICAL' || o.riskLevel === 'HIGH' ? 'blocked' : o.riskLevel === 'MEDIUM' ? 'review' : 'safe'}`}>
+                      {o.riskLevel}
+                    </span>
+                  </td>
+                  <td><span className="badge">{o.status}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
+  )
+}
+
+function RiskCenterPage() {
+  const [signals, setSignals] = useState<RiskSignal[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    getRiskSignals()
+      .then(res => setSignals(res.signals))
+      .catch(console.error)
+      .finally(() => setLoading(false))
+  }, [])
+
+  if (loading) return <Loading>Loading risk signals...</Loading>
+
+  return (
+    <div className="card">
+      <div className="card-header">
+        <h2 className="card-title">Real-Time Risk Signal Center</h2>
+        <span className="badge review">{signals.length} Active Signal(s)</span>
+      </div>
+      {signals.length === 0 ? (
+        <Empty title="No risk signals detected" text="All liquidity ratios, buffer metrics, and payment executions are in normal state." />
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
+          {signals.map(s => (
+            <div key={s.signalId} style={{ background: 'var(--panel-light)', border: '1px solid var(--border)', borderRadius: '8px', padding: '1.25rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <h3 style={{ fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <AlertTriangle size={18} style={{ color: s.severity === 'HIGH' || s.severity === 'CRITICAL' ? '#ef4444' : '#eab308' }} />
+                  {s.title}
+                </h3>
+                <span className={`badge ${s.severity === 'HIGH' || s.severity === 'CRITICAL' ? 'blocked' : 'review'}`}>{s.severity}</span>
+              </div>
+              <p style={{ fontSize: '0.9rem', color: 'var(--text)', margin: '0.35rem 0' }}>{s.description}</p>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border)', fontSize: '0.8rem', color: 'var(--muted)' }}>
+                <span>Entity: <code>{s.relatedEntityId}</code></span>
+                <span><strong>Action:</strong> {s.recommendedAction}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ScenarioSimulatorPage() {
+  const [actionType, setActionType] = useState('REFUND')
+  const [amount, setAmount] = useState<number>(50000)
+  const [result, setResult] = useState<ForecastScenarioResponse | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  const handleSimulate = async () => {
+    setLoading(true)
+    try {
+      const res = await simulateForecastScenario({ actionType, amount })
+      setResult(res)
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { handleSimulate() }, [])
+
+  return (
+    <>
+      <div className="card" style={{ marginBottom: '1.5rem' }}>
+        <h2 className="card-title" style={{ marginBottom: '1rem' }}>Financial Scenario What-If Simulator</h2>
+        <p style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '1.25rem' }}>
+          Simulate prospective financial actions against real merchant liquidity and safety reserve bounds without executing any payment.
+        </p>
+
+        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <div style={{ flex: '1', minWidth: '180px' }}>
+            <label style={{ fontSize: '0.8rem', color: 'var(--muted)', display: 'block', marginBottom: '0.35rem' }}>Action Type</label>
+            <select value={actionType} onChange={e => setActionType(e.target.value)} style={{ width: '100%', padding: '0.65rem', borderRadius: '6px', background: 'var(--panel-light)', border: '1px solid var(--border)', color: 'var(--text)' }}>
+              <option value="REFUND">REFUND</option>
+              <option value="VENDOR_PAYMENT">VENDOR_PAYMENT</option>
+              <option value="PAYROLL">PAYROLL</option>
+              <option value="TAX_PAYMENT">TAX_PAYMENT</option>
+            </select>
+          </div>
+
+          <div style={{ flex: '1', minWidth: '180px' }}>
+            <label style={{ fontSize: '0.8rem', color: 'var(--muted)', display: 'block', marginBottom: '0.35rem' }}>Proposed Amount (INR)</label>
+            <input type="number" value={amount} onChange={e => setAmount(Number(e.target.value))} style={{ width: '100%', padding: '0.65rem', borderRadius: '6px', background: 'var(--panel-light)', border: '1px solid var(--border)', color: 'var(--text)' }} />
+          </div>
+
+          <button className="btn-primary" onClick={handleSimulate} disabled={loading} style={{ height: '42px' }}>
+            {loading ? <LoaderCircle className="spin" size={16} /> : <Sliders size={16} />}
+            Simulate Impact
+          </button>
+        </div>
+      </div>
+
+      {result && (
+        <div className="card">
+          <div className="card-header">
+            <div>
+              <p className="eyebrow">SIMULATION CONSEQUENCE IMPACT</p>
+              <h2 className="card-title">Scenario Result for {result.actionType} of {money(result.amount)}</h2>
+            </div>
+            <StatusBadge value={result.policyDecision} />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginTop: '1rem' }}>
+            <div className="metric-card">
+              <span>Current Safety Buffer</span>
+              <strong>{money(result.currentSafetyBuffer)}</strong>
+            </div>
+            <div className="metric-card">
+              <span>Projected Safety Buffer</span>
+              <strong style={{ color: result.projectedSafetyBuffer < 100000 ? '#ef4444' : '#22c55e' }}>
+                {money(result.projectedSafetyBuffer)}
+              </strong>
+            </div>
+            <div className="metric-card">
+              <span>Safety Buffer Impact</span>
+              <strong style={{ color: result.safetyBufferImpact < 0 ? '#ef4444' : '#22c55e' }}>
+                {money(result.safetyBufferImpact)}
+              </strong>
+            </div>
+            <div className="metric-card">
+              <span>Projected Health Status</span>
+              <StatusBadge value={result.projectedHealthStatus} />
+            </div>
+          </div>
+
+          <div style={{ background: 'var(--panel-light)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border)', marginTop: '1.25rem', fontSize: '0.85rem' }}>
+            <strong>Consequence Fact Summary:</strong>
+            <p style={{ marginTop: '0.25rem', color: 'var(--muted)' }}>{result.consequenceSummary}</p>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
 function AuditPage() {
   const [events, setEvents] = useState<AuditEvent[]>([])
   const [loading, setLoading] = useState(true)
@@ -851,6 +1140,9 @@ export function App() {
     <Shell>
       <Routes>
         <Route path="/" element={<OverviewPage />} />
+        <Route path="/obligations" element={<ObligationsPage />} />
+        <Route path="/risk" element={<RiskCenterPage />} />
+        <Route path="/simulator" element={<ScenarioSimulatorPage />} />
         <Route path="/safety" element={<SafetyPage />} />
         <Route path="/simulations" element={<OverviewPage />} />
         <Route path="/decisions" element={<DecisionsPage />} />
