@@ -23,16 +23,18 @@ public class AgentAnalysisService {
     private final PolicyService policyService;
     private final ExplanationAgentClient explanationAgentClient;
     private final DeterministicExplanationService deterministicExplanationService;
+    private final GovernanceService governanceService;
     private final Validator validator;
 
     public AgentAnalysisService(IntentAgentClient intentAgentClient, SimulationService simulationService,
             PolicyService policyService, ExplanationAgentClient explanationAgentClient,
-            DeterministicExplanationService deterministicExplanationService, Validator validator) {
+            DeterministicExplanationService deterministicExplanationService, GovernanceService governanceService, Validator validator) {
         this.intentAgentClient = intentAgentClient;
         this.simulationService = simulationService;
         this.policyService = policyService;
         this.explanationAgentClient = explanationAgentClient;
         this.deterministicExplanationService = deterministicExplanationService;
+        this.governanceService = governanceService;
         this.validator = validator;
     }
 
@@ -52,7 +54,9 @@ public class AgentAnalysisService {
                 policy.decision(), policy.reason(), policy.recommendation());
         var explanationRequest = new com.paylens.backend.dto.ExplanationAgentRequest(
                 request.message(), agentResponse.intent(), simulation, explanationPolicy);
-        return response(request.message(), agentResponse, simulation, policy, explanation(explanationRequest));
+        var explanation = explanation(explanationRequest);
+        var governance = governanceService.record(request.message(), agentResponse.intent(), simulation, policy, explanation);
+        return response(request.message(), agentResponse, simulation, policy, explanation, governance);
     }
 
     private SimulationRequest validatedAction(AgentFinancialIntent intent) {
@@ -79,16 +83,17 @@ public class AgentAnalysisService {
     private AgentAnalysisResponse response(String message, IntentAgentResponse intentResponse,
             com.paylens.backend.dto.SimulationResult simulation,
             com.paylens.backend.dto.PolicyEvaluationResult policy) {
-        return response(message, intentResponse, simulation, policy, null);
+        return response(message, intentResponse, simulation, policy, null, null);
     }
 
     private AgentAnalysisResponse response(String message, IntentAgentResponse intentResponse,
             com.paylens.backend.dto.SimulationResult simulation,
             com.paylens.backend.dto.PolicyEvaluationResult policy,
-            com.paylens.backend.dto.ExplanationResponse explanation) {
+            com.paylens.backend.dto.ExplanationResponse explanation,
+            com.paylens.backend.dto.GovernanceResponse governance) {
         return new AgentAnalysisResponse(message, intentResponse.status(), intentResponse.intent(),
                 intentResponse.missingFields() == null ? List.of() : intentResponse.missingFields(),
-                intentResponse.message(), simulation, policy, explanation);
+                intentResponse.message(), simulation, policy, explanation, governance);
     }
 
     private com.paylens.backend.dto.ExplanationResponse explanation(com.paylens.backend.dto.ExplanationAgentRequest request) {

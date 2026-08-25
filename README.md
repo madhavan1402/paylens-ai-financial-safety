@@ -98,18 +98,28 @@ The simulation is side-effect free. It returns before/after financial snapshots,
 
 Policy evaluation uses the same request body and returns a deterministic policy result. A ₹20,000 refund is `SAFE`, a ₹50,000 refund is `REVIEW` because its ₹70,000 after-buffer is below the ₹100,000 required margin, and a ₹250,000 refund is `BLOCK` because it cannot cover ₹620,000 of upcoming obligations.
 
-```json
-{
-  "decision": "BLOCK",
-  "reason": "Action would leave insufficient funds to cover upcoming obligations.",
-  "recommendation": "Reduce the amount or delay the action until additional funds are available.",
-  "simulation": {
-    "after": {
-      "currentBalance": 590000,
-      "remainingAfterObligations": -30000,
-      "safetyBuffer": -130000
-    },
-    "consequence": "OBLIGATION_SHORTFALL"
-  }
-}
-```
+
+## Governance, Human Review & Append-Only Audit Trail (Phase 7)
+
+Phase 7 introduces persistent decision recording, human governance workflows, and an immutable append-only audit trail.
+
+- **Decision Persistence**: Every financial safety analysis (`POST /api/agent/analyze`) is recorded in Spring Data JPA (`DecisionRecord`). Decisions track original prompt, intent, simulation, policy results, explanation, and governance status (`SAFE`, `PENDING_REVIEW`, `APPROVED`, `REJECTED`, `BLOCKED`).
+- **State Machine Rules**:
+  - `SAFE` is terminal.
+  - `BLOCKED` is terminal.
+  - `PENDING_REVIEW` can transition to `APPROVED` or `REJECTED`.
+  - `APPROVED` and `REJECTED` are terminal.
+  - Invalid state transitions return HTTP 409 Conflict.
+- **BLOCK Protection**: A `BLOCKED` decision can NEVER be approved or rejected. Any attempt to approve/reject a non-`PENDING_REVIEW` decision returns HTTP 409 Conflict.
+- **Approval & Rejection Semantics**:
+  - `POST /api/decisions/{id}/approve`: Only `PENDING_REVIEW` decisions can be approved.
+  - `POST /api/decisions/{id}/reject`: Only `PENDING_REVIEW` decisions can be rejected (requires a non-blank comment).
+  - **IMPORTANT**: **APPROVED means human governance approval only. No financial transaction is executed in Phase 7.**
+- **Append-Only Audit Trail**: `AuditEvent` records system actions, AI intent parsing, policy evaluation, review requests, approvals, rejections, and blocks. Audit events are strictly append-only (no `PUT`, `PATCH`, or `DELETE` endpoints exist).
+- **APIs**:
+  - `GET /api/decisions`: List decisions (supports optional `status` and `limit` parameters).
+  - `GET /api/decisions/{id}`: Full decision detail with intent, simulation, policy, explanation, and governance status.
+  - `POST /api/decisions/{id}/approve`: Human review approval.
+  - `POST /api/decisions/{id}/reject`: Human review rejection.
+  - `GET /api/audit`: Retrieve append-only audit trail (supports optional `decisionId` query parameter).
+

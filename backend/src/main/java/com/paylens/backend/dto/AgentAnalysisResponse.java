@@ -10,5 +10,6 @@ public record AgentAnalysisResponse(
         String clarificationMessage,
         SimulationResult simulation,
         PolicyEvaluationResult policy,
-        ExplanationResponse explanation) {
+        ExplanationResponse explanation,
+        GovernanceResponse governance) {
 }

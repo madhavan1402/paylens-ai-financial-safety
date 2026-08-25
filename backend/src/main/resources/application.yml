@@ -1,6 +1,11 @@
 spring:
   application:
     name: paylens-backend
+  datasource:
+    url: jdbc:h2:mem:paylens;DB_CLOSE_DELAY=-1
+  jpa:
+    hibernate:
+      ddl-auto: update
 
 server:
   port: 8080

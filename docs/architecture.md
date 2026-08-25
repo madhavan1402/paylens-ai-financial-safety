@@ -67,4 +67,38 @@ Spring Boot treats every agent response as untrusted. `POST /api/agent/analyze` 
 
 The Phase 6 React application is a presentation layer with a persistent operations shell and routes for overview, AI Safety Center, transactions, and scoped empty states. Axios calls the Spring Boot API using `VITE_API_BASE_URL`; the browser never calls Python agents directly. The flow is React UI to Spring Boot API to intent/explanation agents and deterministic simulation/policy services. The Overview reads `/api/dashboard` and `/api/financial-state`; the Safety Center sends only a natural-language message to `/api/agent/analyze` and renders the returned authoritative intent, simulation, policy, and explanation. Local CORS is limited to the Vite development origin.
 
-Phase 5 places the explanation agent after `PolicyService`: validated intent → simulation facts → policy decision → explanation. Spring Boot constructs this structured payload, so a client cannot submit facts as authoritative. The deterministic FastAPI provider formats only supplied values and policy text; it has no balance, risk, execution, or policy capability. A future optional LLM provider is constrained to explain the same facts and its output is validated. If it is unavailable, invalid, or returns another decision, Spring Boot uses a local deterministic fallback. Thus the explanation layer cannot override `PolicyService` or affect financial state.
+
+## Governance, Human Review Workflow, and Immutable Audit Architecture
+
+Phase 7 completes the PayLens safety lifecycle: Intent → Financial State → Simulation → Policy → Explanation → Governance Persistence → Audit.
+
+```text
+POST /api/agent/analyze
+        ↓
+Intent Validation
+        ↓
+Financial Simulation
+        ↓
+Policy Evaluation (SAFE / REVIEW / BLOCK)
+        ↓
+AI Explanation
+        ↓
+GovernanceService (Persists DecisionRecord & Initial AuditEvents)
+        ↓
+Status: SAFE | PENDING_REVIEW | BLOCKED
+        ↓
+Human Review API (POST /api/decisions/{id}/approve | reject)
+        ↓
+Status: APPROVED | REJECTED
+```
+
+### State Machine Integrity
+- `SAFE` (Terminal): Action satisfied financial safety policy.
+- `BLOCKED` (Terminal): Action breached critical safety thresholds. **A BLOCKED decision can NEVER be approved or rejected by human review.**
+- `PENDING_REVIEW`: Action requires human governance review.
+- `APPROVED` (Terminal): Recorded human governance sign-off. **APPROVED means human governance approval only. No financial transaction or money movement is executed.**
+- `REJECTED` (Terminal): Recorded human governance rejection.
+
+### Audit Immutability
+Audit records (`AuditEvent`) are created by backend services during evaluation and human review events (`ACTION_ANALYZED`, `INTENT_PARSED`, `SIMULATION_COMPLETED`, `POLICY_EVALUATED`, `EXPLANATION_GENERATED`, `REVIEW_REQUESTED`, `REVIEW_APPROVED`, `REVIEW_REJECTED`, `ACTION_BLOCKED`). The audit trail is append-only with no modification or deletion endpoints.
+

@@ -12,6 +12,7 @@ import com.paylens.backend.service.AgentAnalysisService;
 import com.paylens.backend.service.DeterministicExplanationService;
 import com.paylens.backend.service.ExplanationAgentClient;
 import com.paylens.backend.service.FinancialStateService;
+import com.paylens.backend.service.GovernanceService;
 import com.paylens.backend.service.IntentAgentClient;
 import com.paylens.backend.service.PolicyService;
 import com.paylens.backend.service.PolicyThresholds;
@@ -26,6 +27,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import static org.mockito.Mockito.mock;
 
 @WebMvcTest(AgentAnalysisController.class)
 @Import({
@@ -89,6 +91,9 @@ class AgentAnalysisControllerTest {
         ExplanationAgentClient explanationAgentClient() {
             return request -> { throw new IllegalStateException("agent unavailable"); };
         }
+
+        @Bean
+        GovernanceService governanceService() { return mock(GovernanceService.class); }
 
         private IntentAgentResponse validIntent(String amount) {
             return new IntentAgentResponse("VALID", new AgentFinancialIntent("REFUND", new BigDecimal(amount),

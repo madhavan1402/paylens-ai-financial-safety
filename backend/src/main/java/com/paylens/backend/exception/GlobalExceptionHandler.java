@@ -7,6 +7,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import java.util.NoSuchElementException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -35,4 +36,12 @@ public class GlobalExceptionHandler {
     public Map<String, String> handleIllegalArgument(IllegalArgumentException exception) {
         return Map.of("error", exception.getMessage());
     }
+
+    @ExceptionHandler(GovernanceConflictException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public Map<String, String> handleGovernanceConflict(GovernanceConflictException exception) { return Map.of("error", exception.getMessage()); }
+
+    @ExceptionHandler(NoSuchElementException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public Map<String, String> handleMissingDecision(NoSuchElementException exception) { return Map.of("error", exception.getMessage()); }
 }
