@@ -4,15 +4,17 @@ import { motion } from 'framer-motion'
 import {
   AlertTriangle, Bell, Bot, CheckCircle2,
   CircleDollarSign, ClipboardList, CreditCard, Gauge, Landmark, LoaderCircle,
-  Menu, Search, Settings, ShieldCheck, Users, WalletCards, XCircle, X, Zap, Info
+  Menu, RefreshCw, Search, Settings, ShieldCheck, Users, WalletCards, XCircle, X, Zap, Info
 } from 'lucide-react'
 import { analyzeAction } from './api/agentApi'
 import { getDashboard, getFinancialState } from './api/dashboardApi'
 import { getAuditEvents, getDecisionDetail, getDecisions } from './api/decisionsApi'
 import { executeDecision, getDecisionExecution, getExecutionDetail, getExecutions } from './api/executionsApi'
+import { getReconciliationHistory, getReliabilityMetrics, triggerReconciliation } from './api/reconciliationsApi'
 import type {
   AgentAnalysisResponse, AuditEvent, DashboardResponse, Decision,
-  DecisionDetail, DecisionSummary, ExecutionResponse, ExecutionStatus, ExecutionSummary, FinancialStateResponse, GovernanceStatus, Transaction
+  DecisionDetail, DecisionSummary, ExecutionResponse, ExecutionStatus, ExecutionSummary, FinancialStateResponse, GovernanceStatus,
+  ReconciliationStatus, ReconciliationSummary, ReliabilityMetrics, Transaction
 } from './types/api'
 import './App.css'
 
@@ -39,15 +41,16 @@ const nav = [
   ['Simulations', '/simulations', Landmark],
   ['Decisions', '/decisions', CheckCircle2],
   ['Executions', '/executions', Zap],
+  ['Reconciliations', '/reconciliations', RefreshCw],
   ['Audit Log', '/audit', ClipboardList],
   ['Settings', '/settings', Settings]
 ] as const
 
 const prompts = ['Refund ₹2.5 lakh to Rahul', 'Pay ₹80,000 to ABC Suppliers', 'Process payroll ₹3 lakh', 'Pay ₹1 lakh tax']
 
-function StatusBadge({ value }: { value: GovernanceStatus | Decision | ExecutionStatus }) {
-  const isSafe = value === 'SAFE' || value === 'APPROVED' || value === 'SUCCEEDED'
-  const isReview = value === 'PENDING_REVIEW' || value === 'REVIEW' || value === 'REQUESTED' || value === 'PROCESSING'
+function StatusBadge({ value }: { value: GovernanceStatus | Decision | ExecutionStatus | ReconciliationStatus }) {
+  const isSafe = value === 'SAFE' || value === 'APPROVED' || value === 'SUCCEEDED' || value === 'CONFIRMED'
+  const isReview = value === 'PENDING_REVIEW' || value === 'REVIEW' || value === 'REQUESTED' || value === 'PROCESSING' || value === 'PENDING' || value === 'MANUAL_REVIEW_REQUIRED'
   const Icon = isSafe ? CheckCircle2 : isReview ? AlertTriangle : XCircle
   const displayLabel = value === 'REVIEW' ? 'PENDING REVIEW' : value.replace(/_/g, ' ')
   const className = value.toLowerCase().replace(/_/g, '-')
@@ -576,6 +579,7 @@ function ExecutionsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [detail, setDetail] = useState<ExecutionResponse | null>(null)
   const [loading, setLoading] = useState(true)
+  const [reconciling, setReconciling] = useState(false)
 
   const loadExecutions = () => {
     setLoading(true)
@@ -594,6 +598,21 @@ function ExecutionsPage() {
       setDetail(null)
     }
   }, [selectedId])
+
+  const handleReconcile = async () => {
+    if (!detail) return
+    setReconciling(true)
+    try {
+      await triggerReconciliation(detail.executionId)
+      const updated = await getExecutionDetail(detail.executionId)
+      setDetail(updated)
+      loadExecutions()
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setReconciling(false)
+    }
+  }
 
   return (
     <>
@@ -662,8 +681,22 @@ function ExecutionsPage() {
               </div>
             </div>
 
+            {detail.status === 'UNKNOWN' && (
+              <div style={{ background: 'rgba(234, 179, 8, 0.15)', border: '1px solid rgba(234, 179, 8, 0.4)', color: '#eab308', padding: '1rem', borderRadius: '8px', marginTop: '1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600, fontSize: '0.9rem', marginBottom: '0.35rem' }}>
+                  <AlertTriangle size={18} /> Execution outcome uncertain
+                </div>
+                <p style={{ fontSize: '0.85rem', margin: 0, color: 'var(--text)' }}>
+                  The provider request could not be confirmed. PayLens will not automatically retry this financial action.
+                </p>
+                <button className="btn-execute" style={{ marginTop: '0.75rem', background: '#eab308', color: '#000' }} onClick={handleReconcile} disabled={reconciling}>
+                  <RefreshCw size={16} className={reconciling ? 'spin' : ''} /> {reconciling ? 'Reconciling...' : 'Reconcile Provider State'}
+                </button>
+              </div>
+            )}
+
             {detail.failureMessage && (
-              <div style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', padding: '1rem', borderRadius: '8px', fontSize: '0.85rem' }}>
+              <div style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', padding: '1rem', borderRadius: '8px', fontSize: '0.85rem', marginTop: '1rem' }}>
                 <strong>Failure Details ({detail.failureCode || 'ERROR'}):</strong>
                 <p style={{ marginTop: '0.25rem' }}>{detail.failureMessage}</p>
               </div>
@@ -671,6 +704,105 @@ function ExecutionsPage() {
           </div>
         </div>
       )}
+    </>
+  )
+}
+
+function ReconciliationsPage() {
+  const [reconciliations, setReconciliations] = useState<ReconciliationSummary[]>([])
+  const [metrics, setMetrics] = useState<ReliabilityMetrics | null>(null)
+  const [filter, setFilter] = useState<string>('ALL')
+  const [loading, setLoading] = useState(true)
+
+  const loadData = () => {
+    setLoading(true)
+    Promise.all([
+      getReconciliationHistory(undefined, filter === 'ALL' ? undefined : filter),
+      getReliabilityMetrics()
+    ])
+      .then(([recons, m]) => {
+        setReconciliations(recons)
+        setMetrics(m)
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(() => { loadData() }, [filter])
+
+  return (
+    <>
+      {metrics && (
+        <div className="card" style={{ marginBottom: '1.5rem' }}>
+          <div className="card-header">
+            <h2 className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Zap size={18} style={{ color: 'var(--primary)' }} /> EXECUTION RELIABILITY DASHBOARD
+            </h2>
+          </div>
+          <div className="stats-grid">
+            <div className="stat-card">
+              <span className="stat-label">Total Executions</span>
+              <span className="stat-value">{metrics.totalExecutions}</span>
+            </div>
+            <div className="stat-card">
+              <span className="stat-label">Confirmed Success</span>
+              <span className="stat-value" style={{ color: '#22c55e' }}>{metrics.confirmedSuccess}</span>
+            </div>
+            <div className="stat-card">
+              <span className="stat-label">Confirmed Failure</span>
+              <span className="stat-value" style={{ color: '#ef4444' }}>{metrics.confirmedFailure}</span>
+            </div>
+            <div className="stat-card">
+              <span className="stat-label">Manual Review Required</span>
+              <span className="stat-value" style={{ color: '#eab308' }}>{metrics.unknownOrManualReview}</span>
+            </div>
+            <div className="stat-card">
+              <span className="stat-label">Success Rate</span>
+              <span className="stat-value" style={{ color: 'var(--primary)' }}>{metrics.successRate.toFixed(1)}%</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="tabs">
+        {['ALL', 'CONFIRMED', 'FAILED', 'PENDING', 'MANUAL_REVIEW_REQUIRED'].map(t => (
+          <button key={t} className={`tab ${filter === t ? 'active' : ''}`} onClick={() => setFilter(t)}>
+            {t.replace(/_/g, ' ')}
+          </button>
+        ))}
+      </div>
+
+      <div className="card">
+        <div className="card-header"><h2 className="card-title">Reconciliation Engine Audit History</h2></div>
+        {loading ? (
+          <Loading>Loading reconciliation history...</Loading>
+        ) : reconciliations.length === 0 ? (
+          <Empty title="No reconciliation records" text="No reconciliation events match the selected filter." />
+        ) : (
+          <div className="table-container">
+            <table>
+              <thead>
+                <tr><th>Reconciliation ID</th><th>Execution ID</th><th>Provider</th><th>Reference</th><th>Resolved Status</th><th>Reconciliation Status</th><th>Outcome</th><th>Retry Safety</th><th>Timestamp</th></tr>
+              </thead>
+              <tbody>
+                {reconciliations.map(r => (
+                  <tr key={r.reconciliationId}>
+                    <td><code>{r.reconciliationId}</code></td>
+                    <td><code>{r.executionId}</code></td>
+                    <td>{r.provider}</td>
+                    <td><code>{r.providerReference || 'N/A'}</code></td>
+                    <td><StatusBadge value={r.resolvedExecutionStatus} /></td>
+                    <td><StatusBadge value={r.status} /></td>
+                    <td><span className="badge">{r.providerOutcome}</span></td>
+                    <td><span className={`badge ${r.retryDecision === 'SAFE_TO_RETRY' ? 'safe' : 'blocked'}`}>{r.retryDecision}</span></td>
+                    <td>{new Date(r.createdAt).toLocaleTimeString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </>
   )
 }
@@ -723,6 +855,7 @@ export function App() {
         <Route path="/simulations" element={<OverviewPage />} />
         <Route path="/decisions" element={<DecisionsPage />} />
         <Route path="/executions" element={<ExecutionsPage />} />
+        <Route path="/reconciliations" element={<ReconciliationsPage />} />
         <Route path="/audit" element={<AuditPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

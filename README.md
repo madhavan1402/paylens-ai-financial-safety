@@ -162,4 +162,46 @@ RazorpayTestExecutionProvider
   - `GET /api/executions/{id}`: Returns complete detail of an execution record.
   - `GET /api/decisions/{id}/execution`: Returns execution record associated with a decision.
 
+## Reconciliation & Reliability Engine (Phase 9)
+
+Phase 9 implements a real-world financial execution reconciliation and reliability layer to safely answer: *"PayLens requested an execution from the provider. What actually happened?"*
+
+```text
+               EXECUTION GATEWAY (STATUS: UNKNOWN)
+                                │
+                                ▼
+                       ReconciliationService
+                                │
+                 1. Load persisted ExecutionRecord
+                 2. Query Razorpay TEST Status API
+                 3. Normalize Provider Outcome
+                                │
+         +----------------------+----------------------+
+         │                      │                      │
+ CONFIRMED_SUCCESS      CONFIRMED_FAILURE          NOT_FOUND /
+   (Status: SUCCEEDED)    (Status: FAILED)          STILL_PROCESSING
+         │                      │                      │
+         ▼                      ▼                      ▼
+  Reconciliation:        Reconciliation:        Reconciliation:
+    CONFIRMED              FAILED             MANUAL_REVIEW_REQUIRED
+```
+
+- **UNKNOWN ≠ FAILED**: PayLens never assumes a network timeout means payment failure. `UNKNOWN` status is never automatically converted to `FAILED`.
+- **Zero Automatic Financial Retries**: `UNKNOWN` outcomes **never** trigger an automatic re-execution of the financial action. PayLens reconciles provider state first.
+- **Provider Outcome Normalization**:
+  - `CONFIRMED_SUCCESS` -> Execution status updated to `SUCCEEDED`, reconciliation `CONFIRMED`.
+  - `CONFIRMED_FAILURE` -> Execution status updated to `FAILED`, reconciliation `FAILED`.
+  - `STILL_PROCESSING` -> Reconciliation status `PENDING`.
+  - `NOT_FOUND` -> Preserved as `NOT_FOUND` provider outcome; reconciliation transitions to `MANUAL_REVIEW_REQUIRED`.
+  - `UNKNOWN` -> Reconciliation transitions to `MANUAL_REVIEW_REQUIRED`.
+- **Reconciliation Idempotency & Concurrency**: Duplicate or concurrent reconciliation requests for an execution ID do not make redundant provider API calls.
+- **Reliability Metrics**: Calculates resolved success rate `(confirmedSuccess / (confirmedSuccess + confirmedFailure))`, explicitly excluding unresolved `UNKNOWN` or `PENDING` states.
+- **Reconciliation APIs**:
+  - `POST /api/executions/{id}/reconcile`: Triggers server-side provider status reconciliation.
+  - `GET /api/executions/{id}/reconciliation`: Returns latest reconciliation record.
+  - `GET /api/reconciliations`: Lists reconciliation history with optional filters.
+  - `GET /api/reconciliations/{id}`: Returns complete reconciliation detail.
+  - `GET /api/reconciliations/metrics`: Returns system execution reliability metrics.
+
+
 

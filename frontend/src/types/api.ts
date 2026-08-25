@@ -168,3 +168,64 @@ export interface ExecutionSummary {
   status: ExecutionStatus;
   createdAt: string;
 }
+
+export type ReconciliationStatus =
+  | 'NOT_REQUIRED'
+  | 'PENDING'
+  | 'IN_PROGRESS'
+  | 'CONFIRMED'
+  | 'FAILED'
+  | 'UNKNOWN'
+  | 'MANUAL_REVIEW_REQUIRED';
+
+export type NormalizedReconciliationOutcome =
+  | 'CONFIRMED_SUCCESS'
+  | 'CONFIRMED_FAILURE'
+  | 'STILL_PROCESSING'
+  | 'NOT_FOUND'
+  | 'UNKNOWN';
+
+export type RetryDecision = 'NOT_SAFE' | 'SAFE_TO_RETRY' | 'MANUAL_REVIEW';
+
+export interface ReconciliationRecord {
+  reconciliationId: string;
+  executionId: string;
+  decisionId: string;
+  provider: ExecutionProvider;
+  providerReference?: string;
+  previousExecutionStatus: ExecutionStatus;
+  resolvedExecutionStatus: ExecutionStatus;
+  status: ReconciliationStatus;
+  providerOutcome: NormalizedReconciliationOutcome;
+  retryDecision: RetryDecision;
+  resolution?: string;
+  failureCode?: string;
+  failureMessage?: string;
+  attemptNumber: number;
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt?: string;
+}
+
+export interface ReconciliationSummary {
+  reconciliationId: string;
+  executionId: string;
+  decisionId: string;
+  provider: ExecutionProvider;
+  providerReference?: string;
+  resolvedExecutionStatus: ExecutionStatus;
+  status: ReconciliationStatus;
+  providerOutcome: NormalizedReconciliationOutcome;
+  retryDecision: RetryDecision;
+  createdAt: string;
+}
+
+export interface ReliabilityMetrics {
+  totalExecutions: number;
+  confirmedSuccess: number;
+  confirmedFailure: number;
+  pending: number;
+  unknownOrManualReview: number;
+  successRate: number;
+}
+

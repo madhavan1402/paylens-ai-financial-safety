@@ -149,3 +149,42 @@ Phase 8 evolves PayLens from a safety & governance advisor to a controlled execu
 - `UNSUPPORTED_EXECUTION` -> Action type (e.g. `PAYROLL`, `TAX_PAYMENT`) not supported by Razorpay TEST API.
 
 
+## Reconciliation & Reliability Engine Architecture (Phase 9)
+
+Phase 9 resolves execution uncertainties without ever automatically retrying the underlying financial operation.
+
+```text
+               UNKNOWN EXECUTION STATE
+                          │
+                          ▼
+            POST /api/executions/{id}/reconcile
+                          │
+                          ▼
+                ReconciliationService
+                          │
+            (Load Execution & Lock Execution ID)
+                          │
+                          ▼
+            PaymentReconciliationProvider (Interface)
+                          │
+                          ▼
+            RazorpayTestReconciliationProvider
+            (SDK: razorpay.refunds.fetch(ref))
+                          │
+        +-----------------+-----------------+
+        │                 │                 │
+CONFIRMED_SUCCESS  CONFIRMED_FAILURE   NOT_FOUND / UNKNOWN
+        │                 │                 │
+        ▼                 ▼                 ▼
+  Status: SUCCEEDED   Status: FAILED    Status: UNKNOWN
+  Recon: CONFIRMED    Recon: FAILED     Recon: MANUAL_REVIEW
+```
+
+### Key Principles
+1. **UNKNOWN ≠ FAILED**: An HTTP timeout does not imply transaction failure.
+2. **Zero Automatic Financial Retries**: Uncertain financial actions are never re-executed automatically.
+3. **Idempotency & Thread Safety**: Concurrency is locked per `executionId.intern()`. Duplicate calls return existing reconciliation state.
+4. **Append-Only Reconciliation Audit**: Reconciliation lifecycle generates append-only events (`RECONCILIATION_REQUESTED`, `RECONCILIATION_STARTED`, `RECONCILIATION_CONFIRMED`, `RECONCILIATION_FAILED`, `RECONCILIATION_PENDING`, `RECONCILIATION_MANUAL_REVIEW`, `RECONCILIATION_NOT_FOUND`).
+
+
+

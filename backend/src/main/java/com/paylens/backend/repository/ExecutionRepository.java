@@ -13,4 +13,5 @@ public interface ExecutionRepository extends JpaRepository<ExecutionRecord, Long
     List<ExecutionRecord> findByDecisionIdAndStatusIn(String decisionId, List<ExecutionStatus> statuses);
     List<ExecutionRecord> findByStatusOrderByCreatedAtDesc(ExecutionStatus status);
     List<ExecutionRecord> findAllByOrderByCreatedAtDesc();
+    long countByStatus(ExecutionStatus status);
 }
