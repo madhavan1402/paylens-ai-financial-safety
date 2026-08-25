@@ -367,4 +367,68 @@ export interface IntelligenceSummaryResponse {
   calculatedAt: string;
 }
 
+export type RiskEventStatus = 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'DISMISSED';
+
+export type RiskEventSource =
+  | 'FINANCIAL_STATE'
+  | 'FORECAST'
+  | 'OBLIGATION'
+  | 'EXECUTION'
+  | 'RECONCILIATION'
+  | 'REVENUE'
+  | 'SYSTEM';
+
+export type RiskPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+
+export interface MonitoringStatusResponse {
+  lastRunAt?: string;
+  nextRunAt?: string;
+  monitoringEnabled: boolean;
+  lastRunDurationMs: number;
+  lastRunStatus: string;
+  eventsDetected: number;
+  eventsUpdated: number;
+  eventsResolved: number;
+  openCount: number;
+  acknowledgedCount: number;
+  resolvedCount: number;
+  dismissedCount: number;
+}
+
+export interface MonitoringCycleResponse {
+  cycleId: string;
+  executedAt: string;
+  durationMs: number;
+  eventsDetected: number;
+  eventsUpdated: number;
+  eventsResolved: number;
+  status: string;
+}
+
+export interface RiskEventResponse {
+  riskEventId: string;
+  fingerprint: string;
+  riskSignalType: RiskSignalType;
+  severity: RiskSeverity;
+  priority: RiskPriority;
+  title: string;
+  description: string;
+  status: RiskEventStatus;
+  source: RiskEventSource;
+  detectedAt: string;
+  firstDetectedAt: string;
+  lastDetectedAt: string;
+  resolvedAt?: string;
+  occurrenceCount: number;
+  relatedEntityType?: string;
+  relatedEntityId?: string;
+  recommendedAction?: string;
+  financialImpact?: number;
+  dismissalReason?: string;
+  resolutionReason?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+
 

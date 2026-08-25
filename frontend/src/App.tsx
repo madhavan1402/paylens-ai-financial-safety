@@ -1,10 +1,10 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
-  AlertTriangle, Bell, Bot, Calendar, CheckCircle2,
+  Activity, AlertTriangle, Bell, Bot, Calendar, Check, CheckCheck, CheckCircle2,
   CircleDollarSign, ClipboardList, CreditCard, Gauge, Landmark, LoaderCircle,
-  Menu, RefreshCw, Search, Settings, ShieldCheck, Sliders, TrendingUp, Users, WalletCards, XCircle, X, Zap, Info
+  Menu, Play, RefreshCw, Search, Settings, ShieldCheck, Sliders, TrendingUp, Users, WalletCards, XCircle, X, Zap, Info
 } from 'lucide-react'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { analyzeAction } from './api/agentApi'
@@ -12,11 +12,12 @@ import { getDashboard, getFinancialState } from './api/dashboardApi'
 import { getAuditEvents, getDecisionDetail, getDecisions } from './api/decisionsApi'
 import { executeDecision, getDecisionExecution, getExecutionDetail, getExecutions } from './api/executionsApi'
 import { getReconciliationHistory, getReliabilityMetrics, triggerReconciliation } from './api/reconciliationsApi'
-import { getIntelligenceSummary, getObligationRisks, getRiskSignals, simulateForecastScenario } from './api/intelligenceApi'
+import { getIntelligenceSummary, getObligationRisks, simulateForecastScenario } from './api/intelligenceApi'
+import { acknowledgeRiskEvent, dismissRiskEvent, getMonitoringStatus, getRiskEvents, resolveRiskEvent, runMonitoringCycle } from './api/riskMonitoringApi'
 import type {
   AgentAnalysisResponse, AuditEvent, DashboardResponse,
   DecisionDetail, DecisionSummary, ExecutionResponse, ExecutionSummary, FinancialStateResponse, ForecastScenarioResponse, GovernanceStatus,
-  IntelligenceSummaryResponse, ObligationRiskItem, ReconciliationSummary, ReliabilityMetrics, RiskSignal, Transaction
+  IntelligenceSummaryResponse, MonitoringStatusResponse, ObligationRiskItem, ReconciliationSummary, ReliabilityMetrics, RiskEventResponse, RiskEventStatus, Transaction
 } from './types/api'
 import './App.css'
 
@@ -958,47 +959,226 @@ function ObligationsPage() {
 }
 
 function RiskCenterPage() {
-  const [signals, setSignals] = useState<RiskSignal[]>([])
+  const [events, setEvents] = useState<RiskEventResponse[]>([])
+  const [status, setStatus] = useState<MonitoringStatusResponse | null>(null)
+  const [filter, setFilter] = useState<string>('ALL')
   const [loading, setLoading] = useState(true)
+  const [running, setRunning] = useState(false)
+  const [dismissModalEventId, setDismissModalEventId] = useState<string | null>(null)
+  const [dismissReason, setDismissReason] = useState('')
+  const [actionError, setActionError] = useState<string | null>(null)
+  const navigate = useNavigate()
 
-  useEffect(() => {
-    getRiskSignals()
-      .then(res => setSignals(res.signals))
-      .catch(console.error)
-      .finally(() => setLoading(false))
-  }, [])
+  const loadData = async () => {
+    setLoading(true)
+    try {
+      const [evts, st] = await Promise.all([
+        getRiskEvents(filter === 'ALL' ? undefined : { status: filter as RiskEventStatus }),
+        getMonitoringStatus()
+      ])
+      setEvents(evts)
+      setStatus(st)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoading(false)
+    }
+  }
 
-  if (loading) return <Loading>Loading risk signals...</Loading>
+  useEffect(() => { loadData() }, [filter])
+
+  const handleRunMonitoring = async () => {
+    setRunning(true)
+    setActionError(null)
+    try {
+      await runMonitoringCycle()
+      await loadData()
+    } catch (e: any) {
+      setActionError('Monitoring run failed.')
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  const handleAcknowledge = async (id: string) => {
+    setActionError(null)
+    try {
+      await acknowledgeRiskEvent(id)
+      await loadData()
+    } catch (e: any) {
+      setActionError(e.response?.data?.error || 'Acknowledge failed.')
+    }
+  }
+
+  const handleConfirmDismiss = async () => {
+    if (!dismissModalEventId) return
+    setActionError(null)
+    try {
+      await dismissRiskEvent(dismissModalEventId, dismissReason)
+      setDismissModalEventId(null)
+      setDismissReason('')
+      await loadData()
+    } catch (e: any) {
+      setActionError(e.response?.data?.error || 'Dismiss failed.')
+    }
+  }
+
+  const handleResolve = async (id: string) => {
+    setActionError(null)
+    try {
+      await resolveRiskEvent(id)
+      await loadData()
+    } catch (e: any) {
+      setActionError(e.response?.data?.error || 'Cannot resolve active risk.')
+    }
+  }
 
   return (
-    <div className="card">
-      <div className="card-header">
-        <h2 className="card-title">Real-Time Risk Signal Center</h2>
-        <span className="badge review">{signals.length} Active Signal(s)</span>
+    <>
+      <div className="card" style={{ marginBottom: '1.5rem', background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.95))' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+          <div>
+            <h2 className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Activity size={20} style={{ color: '#00f2fe' }} /> Autonomous Risk Monitoring Status
+            </h2>
+            <p style={{ fontSize: '0.8rem', color: 'var(--muted)', marginTop: '0.25rem' }}>
+              Monitoring Status: <strong style={{ color: '#22c55e' }}>ACTIVE</strong> • Scheduled Interval: 5 mins •
+              Last run: {status?.lastRunAt ? new Date(status.lastRunAt).toLocaleTimeString() : 'Baseline Initialized'} ({status?.lastRunStatus})
+            </p>
+          </div>
+          <button className="btn-primary" onClick={handleRunMonitoring} disabled={running}>
+            {running ? <LoaderCircle className="spin" size={16} /> : <Play size={16} />}
+            Run Risk Check Now
+          </button>
+        </div>
+
+        {status && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.75rem', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border)', fontSize: '0.8rem' }}>
+            <div><span style={{ color: 'var(--muted)' }}>Open:</span> <strong style={{ color: '#ef4444' }}>{status.openCount}</strong></div>
+            <div><span style={{ color: 'var(--muted)' }}>Acknowledged:</span> <strong style={{ color: '#eab308' }}>{status.acknowledgedCount}</strong></div>
+            <div><span style={{ color: 'var(--muted)' }}>Resolved:</span> <strong style={{ color: '#22c55e' }}>{status.resolvedCount}</strong></div>
+            <div><span style={{ color: 'var(--muted)' }}>Dismissed:</span> <strong style={{ color: 'var(--muted)' }}>{status.dismissedCount}</strong></div>
+            <div><span style={{ color: 'var(--muted)' }}>Last Duration:</span> <strong>{status.lastRunDurationMs} ms</strong></div>
+          </div>
+        )}
       </div>
-      {signals.length === 0 ? (
-        <Empty title="No risk signals detected" text="All liquidity ratios, buffer metrics, and payment executions are in normal state." />
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
-          {signals.map(s => (
-            <div key={s.signalId} style={{ background: 'var(--panel-light)', border: '1px solid var(--border)', borderRadius: '8px', padding: '1.25rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                <h3 style={{ fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <AlertTriangle size={18} style={{ color: s.severity === 'HIGH' || s.severity === 'CRITICAL' ? '#ef4444' : '#eab308' }} />
-                  {s.title}
-                </h3>
-                <span className={`badge ${s.severity === 'HIGH' || s.severity === 'CRITICAL' ? 'blocked' : 'review'}`}>{s.severity}</span>
-              </div>
-              <p style={{ fontSize: '0.9rem', color: 'var(--text)', margin: '0.35rem 0' }}>{s.description}</p>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border)', fontSize: '0.8rem', color: 'var(--muted)' }}>
-                <span>Entity: <code>{s.relatedEntityId}</code></span>
-                <span><strong>Action:</strong> {s.recommendedAction}</span>
-              </div>
-            </div>
-          ))}
+
+      {actionError && (
+        <div style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', padding: '0.75rem 1rem', borderRadius: '8px', marginBottom: '1rem', fontSize: '0.85rem' }}>
+          <AlertTriangle size={16} style={{ marginRight: '0.5rem', display: 'inline-block' }} />
+          {actionError}
         </div>
       )}
-    </div>
+
+      <div className="tabs">
+        {['ALL', 'OPEN', 'ACKNOWLEDGED', 'RESOLVED', 'DISMISSED'].map(t => (
+          <button key={t} className={`tab ${filter === t ? 'active' : ''}`} onClick={() => setFilter(t)}>
+            {t}
+          </button>
+        ))}
+      </div>
+
+      <div className="card">
+        <div className="card-header">
+          <h2 className="card-title">Operational Risk Events</h2>
+          <span className="badge review">{events.length} Event(s)</span>
+        </div>
+
+        {loading ? (
+          <Loading>Loading risk events...</Loading>
+        ) : events.length === 0 ? (
+          <Empty title="No risk events found" text="No active or historical risk events match the selected status filter." />
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
+            {events.map(ev => (
+              <div key={ev.riskEventId} style={{ background: 'var(--panel-light)', border: '1px solid var(--border)', borderRadius: '8px', padding: '1.25rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  <h3 style={{ fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <AlertTriangle size={18} style={{ color: ev.severity === 'CRITICAL' || ev.severity === 'HIGH' ? '#ef4444' : '#eab308' }} />
+                    {ev.title}
+                  </h3>
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    <span className={`badge ${ev.severity === 'CRITICAL' || ev.severity === 'HIGH' ? 'blocked' : 'review'}`}>{ev.severity}</span>
+                    <span className="badge">{ev.priority} PRIORITY</span>
+                    <StatusBadge value={ev.status} />
+                  </div>
+                </div>
+
+                <p style={{ fontSize: '0.9rem', color: 'var(--text)', margin: '0.5rem 0' }}>{ev.description}</p>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem', background: 'var(--bg)', padding: '0.75rem', borderRadius: '6px', fontSize: '0.8rem', margin: '0.75rem 0' }}>
+                  <div><span style={{ color: 'var(--muted)' }}>Detected:</span> <strong>{new Date(ev.firstDetectedAt).toLocaleTimeString()}</strong></div>
+                  <div><span style={{ color: 'var(--muted)' }}>Occurrences:</span> <strong>{ev.occurrenceCount} cycle(s)</strong></div>
+                  <div><span style={{ color: 'var(--muted)' }}>Financial Impact:</span> <strong>{money(ev.financialImpact)}</strong></div>
+                  <div><span style={{ color: 'var(--muted)' }}>Source:</span> <strong>{ev.source}</strong></div>
+                </div>
+
+                {ev.recommendedAction && (
+                  <div style={{ fontSize: '0.85rem', color: 'var(--primary)', background: 'rgba(0, 242, 254, 0.05)', padding: '0.65rem 0.85rem', borderRadius: '6px', border: '1px solid rgba(0, 242, 254, 0.2)', marginBottom: '0.75rem' }}>
+                    <strong>Deterministic Recommendation:</strong> {ev.recommendedAction}
+                  </div>
+                )}
+
+                {ev.dismissalReason && (
+                  <p style={{ fontSize: '0.8rem', color: 'var(--muted)', fontStyle: 'italic' }}>Dismissal Reason: {ev.dismissalReason}</p>
+                )}
+
+                {ev.resolutionReason && (
+                  <p style={{ fontSize: '0.8rem', color: 'var(--safe)', fontStyle: 'italic' }}>Resolution Details: {ev.resolutionReason}</p>
+                )}
+
+                <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '0.75rem', flexWrap: 'wrap' }}>
+                  <button className="btn-secondary" style={{ fontSize: '0.8rem', padding: '0.4rem 0.75rem' }} onClick={() => navigate('/simulator')}>
+                    <Sliders size={14} /> Simulate Impact
+                  </button>
+                  {ev.status === 'OPEN' && (
+                    <button className="btn-secondary" style={{ fontSize: '0.8rem', padding: '0.4rem 0.75rem' }} onClick={() => handleAcknowledge(ev.riskEventId)}>
+                      <Check size={14} /> Acknowledge
+                    </button>
+                  )}
+                  {(ev.status === 'OPEN' || ev.status === 'ACKNOWLEDGED') && (
+                    <>
+                      <button className="btn-secondary" style={{ fontSize: '0.8rem', padding: '0.4rem 0.75rem' }} onClick={() => setDismissModalEventId(ev.riskEventId)}>
+                        <X size={14} /> Dismiss
+                      </button>
+                      <button className="btn-primary" style={{ fontSize: '0.8rem', padding: '0.4rem 0.75rem' }} onClick={() => handleResolve(ev.riskEventId)}>
+                        <CheckCheck size={14} /> Resolve Risk
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {dismissModalEventId && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h3>Dismiss Risk Alert</h3>
+              <button className="icon-button" onClick={() => setDismissModalEventId(null)}><X size={18} /></button>
+            </div>
+            <div className="modal-body">
+              <p style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>
+                Please provide a justification for dismissing risk alert <code style={{ color: 'var(--primary)' }}>{dismissModalEventId}</code>:
+              </p>
+              <textarea
+                value={dismissReason}
+                onChange={e => setDismissReason(e.target.value)}
+                placeholder="Reason for dismissal..."
+                style={{ width: '100%', height: '80px', padding: '0.65rem', borderRadius: '6px', background: 'var(--panel-light)', border: '1px solid var(--border)', color: 'var(--text)', marginTop: '0.75rem' }}
+              />
+            </div>
+            <div className="modal-footer">
+              <button className="btn-secondary" onClick={() => setDismissModalEventId(null)}>Cancel</button>
+              <button className="btn-primary" onClick={handleConfirmDismiss}>Confirm Dismissal</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   )
 }
 

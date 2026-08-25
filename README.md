@@ -203,5 +203,32 @@ Phase 9 implements a real-world financial execution reconciliation and reliabili
   - `GET /api/reconciliations/{id}`: Returns complete reconciliation detail.
   - `GET /api/reconciliations/metrics`: Returns system execution reliability metrics.
 
+## Real-Time Financial Intelligence Engine (Phase 10)
+
+Phase 10 transforms PayLens from a reactive financial action analyzer into a proactive financial intelligence platform.
+
+- **Financial Health Score (0-100)**: Authoritative score calculated from `safetyBuffer`, `availableLiquidity`, and execution reliability penalties.
+- **7-Day Liquidity Forecast**: Daily balance and safety buffer projections reusing Phase 2 deterministic formulas.
+- **Scenario What-If Simulator**: Evaluates proposed action impact using `SimulationService` without mutating backend state.
+
+## Autonomous Risk Monitoring Engine (Phase 11)
+
+Phase 11 introduces an autonomous risk-monitoring engine (`MONITOR -> DETECT CHANGE -> PRIORITIZE -> EXPLAIN -> ALERT -> RECOMMEND`).
+
+- **Safety Guarantee**: PayLens autonomously detects, prioritizes, and explains financial risks, but **never automatically executes financial actions, approves governance decisions, or mutates state**.
+- **Change Detection & Deduplication**: Captures `RiskSnapshot` states to compute actual deltas (safety buffer drop, health status degradation, forecast breach). Deduplicates alerts via stable fingerprints (`riskSignalType:entityType:entityId`) to prevent alert spam.
+- **Automatic Risk Resolution**: Automatically transitions open risk events to `RESOLVED` when underlying financial conditions clear.
+- **Risk Event State Machine**: `OPEN` → `ACKNOWLEDGED` → `RESOLVED` or `DISMISSED`. Manual resolution validates backend conditions first (returns HTTP 409 Conflict if condition remains active).
+- **Scheduled & Manual Monitoring**: Operates on a 5-minute Spring `@Scheduled` background cycle and `POST /api/risk-monitoring/run` manual trigger.
+- **Risk Monitoring APIs**:
+  - `POST /api/risk-monitoring/run`: Executes a single monitoring cycle.
+  - `GET /api/risk-monitoring/status`: Returns monitoring status and telemetry metrics.
+  - `GET /api/risk-events`: Retrieves filtered risk events (`status`, `severity`, `type`).
+  - `GET /api/risk-events/{id}`: Returns complete risk event detail.
+  - `POST /api/risk-events/{id}/acknowledge`: Acknowledges an open risk event.
+  - `POST /api/risk-events/{id}/dismiss`: Dismisses a risk event with optional reason.
+  - `POST /api/risk-events/{id}/resolve`: Manually resolves a risk event if backend condition has cleared.
+
+
 
 

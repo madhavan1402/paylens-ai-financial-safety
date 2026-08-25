@@ -187,4 +187,44 @@ CONFIRMED_SUCCESS  CONFIRMED_FAILURE   NOT_FOUND / UNKNOWN
 4. **Append-Only Reconciliation Audit**: Reconciliation lifecycle generates append-only events (`RECONCILIATION_REQUESTED`, `RECONCILIATION_STARTED`, `RECONCILIATION_CONFIRMED`, `RECONCILIATION_FAILED`, `RECONCILIATION_PENDING`, `RECONCILIATION_MANUAL_REVIEW`, `RECONCILIATION_NOT_FOUND`).
 
 
+## Real-Time Financial Intelligence Engine (Phase 10)
+
+Phase 10 transforms PayLens into a proactive financial intelligence platform.
+
+- **Financial Health Score (0-100)**: Deterministically computed from `safetyBuffer`, `availableLiquidity`, and execution reliability penalties.
+- **7-Day Liquidity Forecast**: Daily balance and safety buffer projections reusing Phase 2 formulas.
+- **Scenario What-If Simulator**: Evaluates proposed action impact using `SimulationService` without mutating backend state.
+
+
+## Autonomous Risk Monitoring Engine (Phase 11)
+
+Phase 11 introduces autonomous risk monitoring (`MONITOR -> DETECT CHANGE -> PRIORITIZE -> EXPLAIN -> ALERT -> RECOMMEND`).
+
+```text
+Financial State & Phase 10 Intelligence
+                ↓
+RiskMonitoringService (5-min Scheduled & Manual API)
+                ↓
+Change Detection (RiskSnapshot Baseline & Delta Comparison)
+                ↓
+Deterministic Risk Detection Rules
+(Buffer Drop, Health Degradation, Forecast Breach, Obligation Risk, Recon Required, Execution Failure, Revenue Surge, Liquidity Critical)
+                ↓
+Fingerprint Deduplication (prevent duplicate open alerts)
+                ↓
+RiskEvent Entity (OPEN → ACKNOWLEDGED → RESOLVED / DISMISSED)
+                ↓
+Deterministic Recommendation Engine
+                ↓
+Human Governance Review / Scenario Simulator Link
+```
+
+### Safety Principles & Rules
+1. **No Automatic Execution**: PayLens autonomously monitors and alerts, but **never automatically executes payments, approves governance, or alters financial state**.
+2. **Scheduled Monitoring**: Operates on a 5-minute Spring `@Scheduled` background cycle and `POST /api/risk-monitoring/run` manual trigger.
+3. **Change Detection & Deduplication**: Baseline snapshots prevent false startup alerts. Stable fingerprints (`type:entityType:entityId`) update existing open risk events rather than creating alert spam.
+4. **Backend-Authoritative State Machine**: Client requests cannot force active financial risks to `RESOLVED` unless the underlying financial condition has cleared.
+
+
+
 
