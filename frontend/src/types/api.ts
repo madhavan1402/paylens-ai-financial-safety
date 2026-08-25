@@ -55,6 +55,18 @@ export type Decision = 'SAFE' | 'REVIEW' | 'BLOCK';
 
 export type GovernanceStatus = 'SAFE' | 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED' | 'BLOCKED';
 
+export type ExecutionStatus =
+  | 'REQUESTED'
+  | 'ELIGIBILITY_REJECTED'
+  | 'PROCESSING'
+  | 'SUCCEEDED'
+  | 'FAILED'
+  | 'DUPLICATE'
+  | 'UNKNOWN'
+  | 'UNSUPPORTED_EXECUTION';
+
+export type ExecutionProvider = 'RAZORPAY_TEST' | 'MOCK_TEST_PROVIDER';
+
 export interface Explanation {
   status: string;
   decision: Decision;
@@ -120,5 +132,39 @@ export interface AuditEvent {
   actorType: 'SYSTEM' | 'AI_AGENT' | 'HUMAN';
   actorId: string;
   description: string;
+  createdAt: string;
+}
+
+export interface ExecutionRequest {
+  decisionId: string;
+  idempotencyKey: string;
+}
+
+export interface ExecutionResponse {
+  executionId: string;
+  decisionId: string;
+  idempotencyKey: string;
+  provider: ExecutionProvider;
+  providerReference?: string;
+  actionType: string;
+  amount: number;
+  currency: string;
+  target?: string;
+  status: ExecutionStatus;
+  failureCode?: string;
+  failureMessage?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ExecutionSummary {
+  executionId: string;
+  decisionId: string;
+  actionType: string;
+  amount: number;
+  currency: string;
+  provider: ExecutionProvider;
+  providerReference?: string;
+  status: ExecutionStatus;
   createdAt: string;
 }

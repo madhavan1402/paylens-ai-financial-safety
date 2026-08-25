@@ -2,16 +2,17 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
-  AlertTriangle, ArrowRight, Bell, Bot, CheckCircle2, ChevronRight,
+  AlertTriangle, Bell, Bot, CheckCircle2,
   CircleDollarSign, ClipboardList, CreditCard, Gauge, Landmark, LoaderCircle,
-  Menu, Search, Settings, ShieldCheck, Users, WalletCards, XCircle, X, Check, Ban
+  Menu, Search, Settings, ShieldCheck, Users, WalletCards, XCircle, X, Zap, Info
 } from 'lucide-react'
 import { analyzeAction } from './api/agentApi'
 import { getDashboard, getFinancialState } from './api/dashboardApi'
-import { approveDecision, getAuditEvents, getDecisionDetail, getDecisions, rejectDecision } from './api/decisionsApi'
+import { getAuditEvents, getDecisionDetail, getDecisions } from './api/decisionsApi'
+import { executeDecision, getDecisionExecution, getExecutionDetail, getExecutions } from './api/executionsApi'
 import type {
   AgentAnalysisResponse, AuditEvent, DashboardResponse, Decision,
-  DecisionDetail, DecisionSummary, GovernanceStatus, Snapshot, Transaction
+  DecisionDetail, DecisionSummary, ExecutionResponse, ExecutionStatus, ExecutionSummary, FinancialStateResponse, GovernanceStatus, Transaction
 } from './types/api'
 import './App.css'
 
@@ -37,18 +38,19 @@ const nav = [
   ['Safety Center', '/safety', ShieldCheck],
   ['Simulations', '/simulations', Landmark],
   ['Decisions', '/decisions', CheckCircle2],
+  ['Executions', '/executions', Zap],
   ['Audit Log', '/audit', ClipboardList],
   ['Settings', '/settings', Settings]
 ] as const
 
 const prompts = ['Refund ₹2.5 lakh to Rahul', 'Pay ₹80,000 to ABC Suppliers', 'Process payroll ₹3 lakh', 'Pay ₹1 lakh tax']
 
-function StatusBadge({ value }: { value: GovernanceStatus | Decision }) {
-  const isSafe = value === 'SAFE' || value === 'APPROVED'
-  const isReview = value === 'PENDING_REVIEW' || value === 'REVIEW'
+function StatusBadge({ value }: { value: GovernanceStatus | Decision | ExecutionStatus }) {
+  const isSafe = value === 'SAFE' || value === 'APPROVED' || value === 'SUCCEEDED'
+  const isReview = value === 'PENDING_REVIEW' || value === 'REVIEW' || value === 'REQUESTED' || value === 'PROCESSING'
   const Icon = isSafe ? CheckCircle2 : isReview ? AlertTriangle : XCircle
-  const displayLabel = value === 'REVIEW' ? 'PENDING REVIEW' : value === 'PENDING_REVIEW' ? 'PENDING REVIEW' : value === 'BLOCK' ? 'BLOCKED' : value
-  const className = value.toLowerCase().replace('_', '-')
+  const displayLabel = value === 'REVIEW' ? 'PENDING REVIEW' : value.replace(/_/g, ' ')
+  const className = value.toLowerCase().replace(/_/g, '-')
   return (
     <span className={`badge ${className}`}>
       <Icon size={14} />
@@ -68,7 +70,7 @@ function Empty({ title, text }: { title: string; text: string }) {
 function Shell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false)
   const path = useLocation().pathname
-  const title = path === '/' ? 'Overview' : path === '/safety' ? 'AI Safety Center' : path.slice(1).replace(/^./, c => c.toUpperCase())
+  const title = path === '/' ? 'Overview' : path === '/safety' ? 'AI Safety Center' : path === '/executions' ? 'Execution Gateway' : path.slice(1).replace(/^./, c => c.toUpperCase())
 
   return (
     <div className="app-shell">
@@ -96,128 +98,210 @@ function Shell({ children }: { children: ReactNode }) {
           </div>
           <div className="top-actions">
             <button className="search"><Search size={16} />Search or command</button>
-            <span className="test-mode">Test mode</span>
+            <span className="test-mode">Razorpay Test Mode</span>
             <button className="icon-button" aria-label="Notifications"><Bell size={18} /></button>
-            <button className="profile">M <span>Merchant</span></button>
           </div>
         </header>
-        <div className="page-content">{children}</div>
+        {children}
       </main>
     </div>
   )
 }
 
-function Overview() {
-  const [data, setData] = useState<DashboardResponse>()
-  const [transactions, setTransactions] = useState<Transaction[]>([])
-  const [error, setError] = useState('')
+function ExecutionModal({
+  decisionId,
+  actionType,
+  amount,
+  currency,
+  target,
+  status: govStatus,
+  onClose,
+  onSuccess
+}: {
+  decisionId: string
+  actionType: string
+  amount: number
+  currency: string
+  target?: string
+  status: GovernanceStatus
+  onClose: () => void
+  onSuccess: (result: ExecutionResponse) => void
+}) {
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [result, setResult] = useState<ExecutionResponse | null>(null)
+
+  const handleConfirm = async () => {
+    setLoading(true)
+    setError(null)
+    const idempotencyKey = `exec_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`
+    try {
+      const res = await executeDecision({ decisionId, idempotencyKey })
+      setResult(res)
+      onSuccess(res)
+    } catch (err: any) {
+      if (err.response?.data?.failureMessage) {
+        setError(err.response.data.failureMessage)
+      } else if (err.response?.data?.error) {
+        setError(err.response.data.error)
+      } else {
+        setError('Execution failed. Provider communication error.')
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal-content">
+        <div className="modal-header">
+          <h3>Execute Test Payment</h3>
+          <button className="icon-button" onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="modal-body">
+          <div className="warning-box">
+            <Info size={18} />
+            <span>TEST MODE — NO REAL MONEY MOVED. Controlled execution via Razorpay TEST provider.</span>
+          </div>
+
+          {!result ? (
+            <>
+              <p style={{ fontSize: '0.9rem', color: 'var(--muted)' }}>
+                You are about to trigger a test-mode payment execution for decision <code style={{ color: 'var(--primary)' }}>{decisionId}</code>.
+              </p>
+
+              <div style={{ background: 'var(--panel-light)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border)' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', fontSize: '0.85rem' }}>
+                  <div><span style={{ color: 'var(--muted)' }}>Action:</span> <strong>{actionType}</strong></div>
+                  <div><span style={{ color: 'var(--muted)' }}>Amount:</span> <strong>{money(amount)} {currency}</strong></div>
+                  <div><span style={{ color: 'var(--muted)' }}>Target:</span> <strong>{target || 'N/A'}</strong></div>
+                  <div><span style={{ color: 'var(--muted)' }}>Governance:</span> <StatusBadge value={govStatus} /></div>
+                  <div><span style={{ color: 'var(--muted)' }}>Provider:</span> <strong>Razorpay TEST</strong></div>
+                </div>
+              </div>
+
+              {error && (
+                <div style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', padding: '0.75rem', borderRadius: '8px', fontSize: '0.85rem' }}>
+                  {error}
+                </div>
+              )}
+            </>
+          ) : (
+            <div className={`execution-result-card ${result.status.toLowerCase()}`}>
+              <div className="exec-header">
+                <h3>
+                  {result.status === 'SUCCEEDED' ? (
+                    <><CheckCircle2 style={{ color: 'var(--safe)' }} /> TEST EXECUTION SUCCEEDED</>
+                  ) : result.status === 'UNKNOWN' ? (
+                    <><AlertTriangle style={{ color: 'var(--review)' }} /> OUTCOME UNKNOWN</>
+                  ) : (
+                    <><XCircle style={{ color: 'var(--block)' }} /> EXECUTION FAILED</>
+                  )}
+                </h3>
+                <StatusBadge value={result.status} />
+              </div>
+
+              {result.status === 'UNKNOWN' && (
+                <p style={{ fontSize: '0.85rem', color: 'var(--review)', margin: '0.5rem 0' }}>
+                  Execution outcome could not be confirmed. Provider timed out. Manual reconciliation required.
+                </p>
+              )}
+
+              <div className="exec-details-grid">
+                <div className="exec-field"><label>Execution ID</label><span>{result.executionId}</span></div>
+                <div className="exec-field"><label>Provider</label><span>{result.provider}</span></div>
+                <div className="exec-field"><label>Reference</label><span>{result.providerReference || 'N/A'}</span></div>
+                <div className="exec-field"><label>Status</label><span>{result.status}</span></div>
+              </div>
+
+              {result.failureMessage && (
+                <p style={{ fontSize: '0.8rem', color: 'var(--muted)', marginTop: '0.75rem' }}>
+                  Reason: {result.failureMessage}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+        <div className="modal-footer">
+          {!result ? (
+            <>
+              <button className="btn-secondary" onClick={onClose} disabled={loading}>Cancel</button>
+              <button className="btn-execute" onClick={handleConfirm} disabled={loading}>
+                {loading ? <LoaderCircle className="spin" size={16} /> : <Zap size={16} />}
+                Confirm & Execute Test Payment
+              </button>
+            </>
+          ) : (
+            <button className="btn-primary" onClick={onClose}>Close</button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function OverviewPage() {
+  const [data, setData] = useState<DashboardResponse | null>(null)
+  const [state, setState] = useState<FinancialStateResponse | null>(null)
 
   useEffect(() => {
-    Promise.all([getDashboard(), getFinancialState()])
-      .then(([dashboard, state]) => { setData(dashboard); setTransactions(state.transactions) })
-      .catch(() => setError('We could not load the financial overview. Check that the PayLens backend is running.'))
+    getDashboard().then(setData).catch(console.error)
+    getFinancialState().then(setState).catch(console.error)
   }, [])
 
-  if (error) return <div className="notice error"><XCircle size={18} />{error}</div>
-  if (!data) return <Loading>Loading financial overview…</Loading>
+  if (!data || !state) return <Loading>Loading dashboard metrics...</Loading>
 
   return (
     <>
-      <section className="page-intro">
-        <div>
-          <h2>Financial overview</h2>
-          <p>A live view of liquidity, obligations, and your protected safety margin.</p>
-        </div>
-        <NavLink to="/safety" className="primary">Analyze an action <ArrowRight size={16} /></NavLink>
-      </section>
-      <section className="metric-grid">
-        {Object.entries(labels).map(([key, label]) => {
-          const value = data[key as keyof DashboardResponse] as number
-          return (
-            <article className="metric-card" key={key}>
-              <span>{label}</span>
-              <strong className={key === 'safetyBuffer' && value < 0 ? 'negative' : ''}>{money(value)}</strong>
-              <small>{key === 'safetyBuffer' ? 'After obligations and reserve' : 'Authoritative backend figure'}</small>
-            </article>
-          )
-        })}
-      </section>
-      <section className="two-col">
-        <article className="panel health">
-          <div className="panel-heading">
-            <div>
-              <p className="eyebrow">LIQUIDITY POSITION</p>
-              <h2>Financial health</h2>
-            </div>
-            <span className="live-dot">Live data</span>
+      <div className="metrics-grid">
+        {Object.entries(data).filter(([k]) => k !== 'currency').map(([k, v]) => (
+          <div className="metric-card" key={k}>
+            <span>{labels[k] ?? k}</span>
+            <strong>{money(v)}</strong>
           </div>
-          {[
-            ['Current balance', data.currentBalance],
-            ['Upcoming obligations', data.upcomingObligations],
-            ['Safety reserve', data.safetyReserve],
-            ['Safety buffer', data.safetyBuffer]
-          ].map(([name, value]) => (
-            <div className="health-row" key={String(name)}>
-              <span>{name}</span>
-              <i><b style={{ width: `${Math.min(100, Math.abs(Number(value)) / data.currentBalance * 100)}%` }} /></i>
-              <strong>{money(Number(value))}</strong>
-            </div>
-          ))}
-        </article>
-        <Activity rows={transactions} />
-      </section>
+        ))}
+      </div>
+      <div className="card">
+        <div className="card-header"><h2 className="card-title">Recent Financial State Transactions</h2></div>
+        <div className="table-container">
+          <table>
+            <thead>
+              <tr><th>ID</th><th>Type</th><th>Amount</th><th>Description</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+              {state.transactions.map((t: Transaction) => (
+                <tr key={t.id}>
+                  <td><code>{t.id}</code></td>
+                  <td>{t.type}</td>
+                  <td><strong>{money(t.amount)}</strong></td>
+                  <td>{t.description}</td>
+                  <td><span className="badge safe">{t.status}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </>
   )
 }
 
-function Activity({ rows }: { rows: Transaction[] }) {
-  return (
-    <article className="panel activity">
-      <div className="panel-heading">
-        <div>
-          <p className="eyebrow">LEDGER</p>
-          <h2>Recent financial activity</h2>
-        </div>
-        <NavLink to="/transactions">View all <ChevronRight size={15} /></NavLink>
-      </div>
-      {rows.length ? (
-        <table>
-          <thead>
-            <tr><th>Type</th><th>Amount</th><th>Status</th></tr>
-          </thead>
-          <tbody>
-            {rows.slice(0, 5).map(t => (
-              <tr key={t.id}>
-                <td><b>{t.type.replaceAll('_', ' ')}</b><small>{t.description}</small></td>
-                <td>{money(t.amount)}</td>
-                <td><span className="table-status">{t.status}</span></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      ) : (
-        <p className="muted">No transaction activity is available.</p>
-      )}
-    </article>
-  )
-}
-
-function Safety() {
-  const [message, setMessage] = useState(prompts[0])
-  const [result, setResult] = useState<AgentAnalysisResponse>()
+function SafetyPage() {
+  const [msg, setMsg] = useState('Pay ₹1000 to vendor for supplies')
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [res, setRes] = useState<AgentAnalysisResponse | null>(null)
+  const [execModalOpen, setExecModalOpen] = useState(false)
+  const [execResult, setExecResult] = useState<ExecutionResponse | null>(null)
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!message.trim()) return
+  const handleAnalyze = async (text: string) => {
     setLoading(true)
-    setError('')
-    setResult(undefined)
+    setExecResult(null)
     try {
-      setResult(await analyzeAction(message))
-    } catch {
-      setError('Analysis is temporarily unavailable. Your financial state has not been changed.')
+      const data = await analyzeAction(text)
+      setRes(data)
+    } catch (e) {
+      console.error(e)
     } finally {
       setLoading(false)
     }
@@ -225,699 +309,425 @@ function Safety() {
 
   return (
     <>
-      <section className="safety-hero">
-        <p className="eyebrow">AI SAFETY CENTER</p>
-        <h2>Analyze financial actions before they happen.</h2>
-        <p>Validate intent, simulate impact, and apply your configured safety policy.</p>
-        <form className="command" onSubmit={submit}>
-          <label htmlFor="command">What would you like to do?</label>
-          <textarea id="command" value={message} onChange={e => setMessage(e.target.value)} />
-          <button className="primary" disabled={loading}>
-            {loading ? <LoaderCircle className="spin" size={17} /> : <Bot size={17} />}
-            Analyze action
+      <div className="card">
+        <h2 className="card-title" style={{ marginBottom: '1rem' }}>Analyze Financial Action Intent</h2>
+        <div className="prompt-bar">
+          {prompts.map(p => (
+            <button className="prompt-chip" key={p} onClick={() => { setMsg(p); handleAnalyze(p); }}>{p}</button>
+          ))}
+        </div>
+        <div className="analysis-input">
+          <input value={msg} onChange={e => setMsg(e.target.value)} placeholder="Type natural language financial intent..." />
+          <button className="btn-primary" onClick={() => handleAnalyze(msg)} disabled={loading}>
+            {loading ? <LoaderCircle className="spin" size={16} /> : <Bot size={16} />}
+            Analyze Safety
           </button>
-        </form>
-        <div className="chips">
-          {prompts.map(x => <button key={x} onClick={() => setMessage(x)}>{x}</button>)}
-        </div>
-      </section>
-      {loading && <Loading>Analyzing your request…</Loading>}
-      {error && <div className="notice error"><XCircle size={18} />{error}</div>}
-      {result && <Result value={result} />}
-    </>
-  )
-}
-
-function SnapshotCard({ title, data }: { title: string; data: Snapshot }) {
-  return (
-    <article className="snapshot">
-      <p className="eyebrow">{title}</p>
-      {(['currentBalance', 'upcomingObligations', 'safetyBuffer'] as const).map(k => (
-        <div key={k}>
-          <span>{labels[k]}</span>
-          <b className={k === 'safetyBuffer' && data[k] < 0 ? 'negative' : ''}>{money(data[k])}</b>
-        </div>
-      ))}
-    </article>
-  )
-}
-
-function Result({ value }: { value: AgentAnalysisResponse }) {
-  if (value.status === 'NEEDS_CLARIFICATION') {
-    return (
-      <div className="notice clarification">
-        <AlertTriangle size={22} />
-        <div>
-          <h2>More information needed</h2>
-          <p>{value.clarificationMessage ?? `Please provide: ${value.missingFields.join(', ')}`}</p>
         </div>
       </div>
-    )
-  }
 
-  if (value.status === 'INVALID' || !value.intent || !value.simulation || !value.policy) {
-    return (
-      <div className="notice error">
-        <XCircle size={22} />
-        <div>
-          <h2>PayLens couldn't understand that financial action.</h2>
-          <p>{value.clarificationMessage ?? 'Try one of the examples above.'}</p>
-        </div>
-      </div>
-    )
-  }
+      {res && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
+          {res.status === 'NEEDS_CLARIFICATION' ? (
+            <div className="card"><AlertTriangle size={24} color="#f59e0b" /><h3>Clarification Needed</h3><p>{res.clarificationMessage}</p></div>
+          ) : (
+            <div className="card">
+              <div className="card-header">
+                <div>
+                  <p className="eyebrow">DETERMINISTIC SAFETY ANALYSIS</p>
+                  <h2 className="card-title">{res.message}</h2>
+                </div>
+                {res.governance && <StatusBadge value={res.governance.status} />}
+              </div>
 
-  const { intent, simulation, policy, explanation, governance } = value
-  return (
-    <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="analysis-result">
-      <div className="result-grid">
-        <article className="panel">
-          <p className="eyebrow">AI INTERPRETATION</p>
-          <h2>{intent.actionType.replaceAll('_', ' ')}</h2>
-          <dl>
-            <div><dt>Amount</dt><dd>{money(intent.amount)}</dd></div>
-            <div><dt>Target</dt><dd>{intent.target ?? 'Not specified'}</dd></div>
-            <div><dt>Currency</dt><dd>{intent.currency}</dd></div>
-          </dl>
-        </article>
-        <article className={`decision-panel ${policy.decision.toLowerCase()}`}>
-          <p className="eyebrow">SAFETY DECISION</p>
-          <StatusBadge value={governance?.status ?? policy.decision} />
-          <h2>
-            {policy.decision === 'SAFE'
-              ? 'Action satisfies the current safety policy.'
-              : policy.decision === 'REVIEW'
-              ? 'Human review required'
-              : 'Action cannot proceed safely.'}
-          </h2>
-          <p>{policy.reason}</p>
-          {governance && (
-            <div style={{ marginTop: '12px', fontSize: '12px', color: '#64748b' }}>
-              Persisted Decision ID: <code>{governance.decisionId}</code>
+              {res.simulation && res.policy && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>
+                  <div style={{ background: 'var(--panel-light)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border)' }}>
+                    <h3 style={{ fontSize: '0.9rem', marginBottom: '0.5rem', color: 'var(--muted)' }}>FINANCIAL IMPACT SIMULATION</h3>
+                    <p>Liquidity Change: <strong>{money(res.simulation.impact.liquidityChange)}</strong></p>
+                    <p>Buffer Change: <strong>{money(res.simulation.impact.safetyBufferChange)}</strong></p>
+                    <p style={{ marginTop: '0.5rem', fontSize: '0.85rem' }}>{res.simulation.consequence}</p>
+                  </div>
+                  <div style={{ background: 'var(--panel-light)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border)' }}>
+                    <h3 style={{ fontSize: '0.9rem', marginBottom: '0.5rem', color: 'var(--muted)' }}>DETERMINISTIC POLICY EVALUATION</h3>
+                    <p style={{ fontSize: '1rem', fontWeight: '700', margin: '0.25rem 0' }}>{res.policy.decision}</p>
+                    <p style={{ fontSize: '0.85rem' }}>{res.policy.reason}</p>
+                  </div>
+                </div>
+              )}
+
+              {res.governance && (
+                <div className="gateway-banner">
+                  <div className="gateway-info">
+                    <h4><Zap size={18} style={{ color: 'var(--primary)' }} /> Controlled Financial Execution Gateway</h4>
+                    <p>
+                      {res.governance.status === 'SAFE' && 'Decision is SAFE. Eligible for controlled Razorpay TEST execution upon user confirmation.'}
+                      {res.governance.status === 'APPROVED' && 'Decision is APPROVED by governance. Eligible for controlled Razorpay TEST execution.'}
+                      {res.governance.status === 'PENDING_REVIEW' && 'Decision requires human governance review. Execution is DENIED until approved.'}
+                      {res.governance.status === 'REJECTED' && 'Decision was REJECTED by governance. Execution is DENIED.'}
+                      {res.governance.status === 'BLOCKED' && 'Decision was BLOCKED by PayLens policy. Execution is strictly DENIED.'}
+                    </p>
+                  </div>
+
+                  {(res.governance.status === 'SAFE' || res.governance.status === 'APPROVED') && !execResult && (
+                    <button className="btn-execute" onClick={() => setExecModalOpen(true)}>
+                      <Zap size={16} /> Execute Test Payment
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {execResult && (
+                <div className={`execution-result-card ${execResult.status.toLowerCase()}`}>
+                  <div className="exec-header">
+                    <h3>
+                      {execResult.status === 'SUCCEEDED' ? (
+                        <><CheckCircle2 style={{ color: 'var(--safe)' }} /> TEST EXECUTION SUCCEEDED</>
+                      ) : (
+                        <><XCircle style={{ color: 'var(--block)' }} /> EXECUTION FAILED</>
+                      )}
+                    </h3>
+                    <StatusBadge value={execResult.status} />
+                  </div>
+                  <div className="exec-details-grid">
+                    <div className="exec-field"><label>Execution ID</label><span>{execResult.executionId}</span></div>
+                    <div className="exec-field"><label>Provider</label><span>{execResult.provider}</span></div>
+                    <div className="exec-field"><label>Reference</label><span>{execResult.providerReference || 'N/A'}</span></div>
+                  </div>
+                </div>
+              )}
+
+              {execModalOpen && res.governance && res.intent && (
+                <ExecutionModal
+                  decisionId={res.governance.decisionId}
+                  actionType={res.intent.actionType}
+                  amount={res.intent.amount}
+                  currency={res.intent.currency}
+                  target={res.intent.target}
+                  status={res.governance.status}
+                  onClose={() => setExecModalOpen(false)}
+                  onSuccess={setExecResult}
+                />
+              )}
             </div>
           )}
-        </article>
-      </div>
-
-      <article className="panel">
-        <p className="eyebrow">AUTHORITATIVE SIMULATION</p>
-        <h2>Before and after</h2>
-        <div className="comparison">
-          <SnapshotCard title="Before" data={simulation.before} />
-          <ArrowRight className="comparison-arrow" />
-          <SnapshotCard title="After" data={simulation.after} />
-        </div>
-      </article>
-
-      <div className="result-grid lower">
-        <article className="panel">
-          <p className="eyebrow">WHY PAYLENS DECIDED THIS</p>
-          <h2>Policy evaluation</h2>
-          <p className="policy-reason">{policy.reason}</p>
-          <h3>Recommendation</h3>
-          <p>{policy.recommendation}</p>
-        </article>
-        <article className="panel">
-          <p className="eyebrow">FINANCIAL IMPACT</p>
-          <h2>Simulated change</h2>
-          <dl>
-            <div><dt>Liquidity change</dt><dd>{money(simulation.impact.liquidityChange)}</dd></div>
-            <div><dt>Safety buffer change</dt><dd>{money(simulation.impact.safetyBufferChange)}</dd></div>
-            <div><dt>Reserve breached</dt><dd>{simulation.impact.reserveBreached ? 'Yes' : 'No'}</dd></div>
-            <div><dt>Obligations covered</dt><dd>{simulation.impact.obligationsCovered ? 'Yes' : 'No'}</dd></div>
-          </dl>
-        </article>
-      </div>
-
-      {explanation && (
-        <article className="panel explanation">
-          <div>
-            <p className="eyebrow">AI EXPLANATION</p>
-            <h2>{explanation.headline}</h2>
-            <p>{explanation.explanation}</p>
-          </div>
-          <div>
-            <h3>Key factors</h3>
-            <ul>{explanation.keyFactors.map(x => <li key={x}>{x}</li>)}</ul>
-            <h3>Recommendation</h3>
-            <p>{explanation.recommendation}</p>
-            <span className="provider">Provider: {explanation.providerMode}</span>
-          </div>
-        </article>
+        </motion.div>
       )}
-    </motion.section>
-  )
-}
-
-function Transactions() {
-  const [rows, setRows] = useState<Transaction[]>()
-  useEffect(() => { getFinancialState().then(x => setRows(x.transactions)).catch(() => setRows([])) }, [])
-  if (!rows) return <Loading>Loading transactions…</Loading>
-
-  return (
-    <article className="panel full-table">
-      <p className="eyebrow">LEDGER</p>
-      <h2>Transactions</h2>
-      {rows.length ? (
-        <table>
-          <thead>
-            <tr><th>ID</th><th>Type</th><th>Description</th><th>Amount</th><th>Timestamp</th><th>Status</th></tr>
-          </thead>
-          <tbody>
-            {rows.map(t => (
-              <tr key={t.id}>
-                <td>{t.id}</td>
-                <td>{t.type}</td>
-                <td>{t.description}</td>
-                <td>{money(t.amount)}</td>
-                <td>{new Date(t.timestamp).toLocaleDateString('en-IN')}</td>
-                <td><span className="table-status">{t.status}</span></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      ) : (
-        <Empty title="No transactions" text="No transaction data is available from the financial state service." />
-      )}
-    </article>
+    </>
   )
 }
 
 function DecisionsPage() {
   const [decisions, setDecisions] = useState<DecisionSummary[]>([])
   const [filter, setFilter] = useState<string>('ALL')
-  const [loading, setLoading] = useState(true)
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [error, setError] = useState('')
+  const [detail, setDetail] = useState<DecisionDetail | null>(null)
+  const [events, setEvents] = useState<AuditEvent[]>([])
+  const [execDetail, setExecDetail] = useState<ExecutionResponse | null>(null)
+  const [execModalOpen, setExecModalOpen] = useState(false)
+  const [loading, setLoading] = useState(true)
 
-  const loadDecisions = async () => {
+  const loadDecisions = () => {
     setLoading(true)
-    setError('')
-    try {
-      const data = await getDecisions(filter === 'ALL' ? undefined : filter)
-      setDecisions(data)
-    } catch {
-      setError('Could not load decisions from governance service.')
-    } finally {
-      setLoading(false)
-    }
+    getDecisions(filter === 'ALL' ? undefined : filter)
+      .then(setDecisions)
+      .catch(console.error)
+      .finally(() => setLoading(false))
   }
 
   useEffect(() => { loadDecisions() }, [filter])
 
-  // Derive summary metrics from backend decisions list
-  const metrics = {
-    total: decisions.length,
-    safe: decisions.filter(d => d.status === 'SAFE').length,
-    pending: decisions.filter(d => d.status === 'PENDING_REVIEW').length,
-    approved: decisions.filter(d => d.status === 'APPROVED').length,
-    blocked: decisions.filter(d => d.status === 'BLOCKED').length
-  }
+  useEffect(() => {
+    if (selectedId) {
+      getDecisionDetail(selectedId).then(setDetail).catch(console.error)
+      getAuditEvents(selectedId).then(setEvents).catch(console.error)
+      getDecisionExecution(selectedId).then(setExecDetail).catch(() => setExecDetail(null))
+    } else {
+      setDetail(null)
+      setEvents([])
+      setExecDetail(null)
+    }
+  }, [selectedId])
 
   return (
     <>
-      <section className="page-intro">
-        <div>
-          <h2>Financial Governance Decisions</h2>
-          <p>Persisted financial safety decisions and human review controls.</p>
-        </div>
-      </section>
-
-      <section className="metric-grid" style={{ marginBottom: '20px' }}>
-        <article className="metric-card">
-          <span>Total Decisions</span>
-          <strong>{metrics.total}</strong>
-          <small>Backend records</small>
-        </article>
-        <article className="metric-card">
-          <span>Pending Review</span>
-          <strong style={{ color: '#a86a08' }}>{metrics.pending}</strong>
-          <small>Requires human approval</small>
-        </article>
-        <article className="metric-card">
-          <span>Blocked</span>
-          <strong className="negative">{metrics.blocked}</strong>
-          <small>Policy violations</small>
-        </article>
-      </section>
-
-      <div className="status-tabs">
-        {['ALL', 'PENDING_REVIEW', 'APPROVED', 'REJECTED', 'SAFE', 'BLOCKED'].map(s => (
-          <button
-            key={s}
-            className={`status-tab ${filter === s ? 'active' : ''}`}
-            onClick={() => setFilter(s)}
-          >
-            {s.replaceAll('_', ' ')}
+      <div className="tabs">
+        {['ALL', 'PENDING_REVIEW', 'APPROVED', 'REJECTED', 'SAFE', 'BLOCKED'].map(t => (
+          <button key={t} className={`tab ${filter === t ? 'active' : ''}`} onClick={() => setFilter(t)}>
+            {t.replace(/_/g, ' ')}
           </button>
         ))}
       </div>
 
-      {loading ? (
-        <Loading>Loading governance decisions…</Loading>
-      ) : error ? (
-        <div className="notice error"><XCircle size={18} />{error}</div>
-      ) : (
-        <article className="panel full-table">
-          {decisions.length ? (
+      <div className="card">
+        <div className="card-header"><h2 className="card-title">Governance Decisions</h2></div>
+        {loading ? (
+          <Loading>Loading governance decisions...</Loading>
+        ) : decisions.length === 0 ? (
+          <Empty title="No decisions found" text="No governance decisions match the selected status filter." />
+        ) : (
+          <div className="table-container">
             <table>
               <thead>
-                <tr>
-                  <th>Decision ID</th>
-                  <th>Action</th>
-                  <th>Amount</th>
-                  <th>Target</th>
-                  <th>Policy Decision</th>
-                  <th>Governance Status</th>
-                  <th>Created</th>
-                  <th>Action</th>
-                </tr>
+                <tr><th>Decision ID</th><th>Action</th><th>Amount</th><th>Target</th><th>Policy</th><th>Status</th><th>Created</th><th>Actions</th></tr>
               </thead>
               <tbody>
                 {decisions.map(d => (
                   <tr key={d.decisionId}>
                     <td><code>{d.decisionId}</code></td>
-                    <td><b>{d.actionType.replaceAll('_', ' ')}</b></td>
-                    <td>{money(d.amount)}</td>
-                    <td>{d.target ?? 'N/A'}</td>
-                    <td><StatusBadge value={d.decision} /></td>
+                    <td>{d.actionType}</td>
+                    <td><strong>{money(d.amount)}</strong></td>
+                    <td>{d.target || 'N/A'}</td>
+                    <td><span className="badge">{d.decision}</span></td>
                     <td><StatusBadge value={d.status} /></td>
-                    <td>{new Date(d.createdAt).toLocaleString('en-IN')}</td>
+                    <td>{new Date(d.createdAt).toLocaleTimeString()}</td>
                     <td>
-                      <button className="btn-view" onClick={() => setSelectedId(d.decisionId)}>
-                        View Details
-                      </button>
+                      <button className="btn-secondary" onClick={() => setSelectedId(d.decisionId)}>Inspect</button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          ) : (
-            <Empty title="No decisions found" text="No safety decisions match the selected status filter." />
-          )}
-        </article>
-      )}
-
-      {selectedId && (
-        <DecisionDetailDrawer
-          decisionId={selectedId}
-          onClose={() => setSelectedId(null)}
-          onStatusUpdated={() => { loadDecisions() }}
-        />
-      )}
-    </>
-  )
-}
-
-function DecisionDetailDrawer({
-  decisionId,
-  onClose,
-  onStatusUpdated
-}: {
-  decisionId: string
-  onClose: () => void
-  onStatusUpdated: () => void
-}) {
-  const [detail, setDetail] = useState<DecisionDetail | null>(null)
-  const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [showApproveModal, setShowApproveModal] = useState(false)
-  const [showRejectModal, setShowRejectModal] = useState(false)
-
-  const loadData = async () => {
-    setLoading(true)
-    try {
-      const [d, events] = await Promise.all([
-        getDecisionDetail(decisionId),
-        getAuditEvents(decisionId)
-      ])
-      setDetail(d)
-      setAuditEvents(events)
-    } catch {
-      setError('Failed to load decision detail or audit trail.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => { loadData() }, [decisionId])
-
-  const handleApprove = async () => {
-    try {
-      await approveDecision(decisionId, 'demo-user', 'Reviewed and approved by human governance.')
-      setShowApproveModal(false)
-      await loadData()
-      onStatusUpdated()
-    } catch (err: any) {
-      alert(err.response?.data?.error ?? 'Approval failed.')
-    }
-  }
-
-  const handleReject = async (comment: string) => {
-    try {
-      await rejectDecision(decisionId, 'demo-user', comment)
-      setShowRejectModal(false)
-      await loadData()
-      onStatusUpdated()
-    } catch (err: any) {
-      alert(err.response?.data?.error ?? 'Rejection failed.')
-    }
-  }
-
-  return (
-    <div className="drawer-backdrop" onClick={onClose}>
-      <div className="drawer-content" onClick={e => e.stopPropagation()}>
-        <div className="drawer-header">
-          <div>
-            <p className="eyebrow">DECISION DETAIL</p>
-            <h2 style={{ margin: 0 }}><code>{decisionId}</code></h2>
           </div>
-          <button className="modal-close" onClick={onClose}><X size={22} /></button>
-        </div>
-
-        {loading ? (
-          <Loading>Fetching complete decision record…</Loading>
-        ) : error || !detail ? (
-          <div className="notice error"><XCircle size={18} />{error}</div>
-        ) : (
-          <>
-            {/* Status Header Banner */}
-            <article className={`decision-panel ${detail.policy.decision.toLowerCase()}`}>
-              <p className="eyebrow">GOVERNANCE STATUS</p>
-              <StatusBadge value={detail.status} />
-
-              {detail.status === 'PENDING_REVIEW' && (
-                <div className="notice clarification" style={{ marginTop: '14px' }}>
-                  <AlertTriangle size={20} />
-                  <div>
-                    <h2>Human review required</h2>
-                    <p>This action triggered policy review rules and requires manual sign-off before proceeding.</p>
-                    <div className="action-bar">
-                      <button className="btn-approve" onClick={() => setShowApproveModal(true)}>
-                        <Check size={16} /> Approve
-                      </button>
-                      <button className="btn-reject" onClick={() => setShowRejectModal(true)}>
-                        <Ban size={16} /> Reject
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {detail.status === 'BLOCKED' && (
-                <div className="notice blocked-notice" style={{ marginTop: '14px' }}>
-                  <XCircle size={20} />
-                  <div>
-                    <h2>BLOCKED — Action cannot be approved</h2>
-                    <p>This action severely breaches financial safety thresholds and cannot be approved by human review. A new analysis request with different terms is required.</p>
-                  </div>
-                </div>
-              )}
-
-              {detail.status === 'APPROVED' && (
-                <div className="notice approved-notice" style={{ marginTop: '14px' }}>
-                  <CheckCircle2 size={20} />
-                  <div>
-                    <h2>Governance Approval Recorded</h2>
-                    <p>Human governance approval has been recorded for this action. <strong>No money movement or payment execution was performed.</strong></p>
-                  </div>
-                </div>
-              )}
-
-              {detail.status === 'REJECTED' && (
-                <div className="notice error" style={{ marginTop: '14px' }}>
-                  <XCircle size={20} />
-                  <div>
-                    <h2>Action Rejected</h2>
-                    <p>Human review rejected this financial action.</p>
-                  </div>
-                </div>
-              )}
-            </article>
-
-            {/* Original Prompt & Intent */}
-            <article className="panel">
-              <p className="eyebrow">ORIGINAL REQUEST & INTENT</p>
-              <p style={{ fontStyle: 'italic', background: '#f1f5f9', padding: '10px 14px', borderRadius: '6px' }}>
-                "{detail.originalMessage}"
-              </p>
-              <dl>
-                <div><dt>Action Type</dt><dd>{detail.intent.actionType}</dd></div>
-                <div><dt>Amount</dt><dd>{money(detail.intent.amount)}</dd></div>
-                <div><dt>Target</dt><dd>{detail.intent.target ?? 'Not specified'}</dd></div>
-                <div><dt>Currency</dt><dd>{detail.intent.currency}</dd></div>
-              </dl>
-            </article>
-
-            {/* Simulation Comparison */}
-            <article className="panel">
-              <p className="eyebrow">SIMULATION RESULTS</p>
-              <div className="comparison">
-                <SnapshotCard title="Before" data={detail.simulation.before} />
-                <ArrowRight className="comparison-arrow" />
-                <SnapshotCard title="After" data={detail.simulation.after} />
-              </div>
-            </article>
-
-            {/* Policy Evaluation */}
-            <article className="panel">
-              <p className="eyebrow">POLICY EVALUATION</p>
-              <h2>{detail.policy.reason}</h2>
-              <p>{detail.policy.recommendation}</p>
-            </article>
-
-            {/* AI Explanation if present */}
-            {detail.explanation && (
-              <article className="panel explanation">
-                <div>
-                  <p className="eyebrow">AI EXPLANATION</p>
-                  <h2>{detail.explanation.headline}</h2>
-                  <p>{detail.explanation.explanation}</p>
-                </div>
-                <div>
-                  <h3>Key factors</h3>
-                  <ul>{detail.explanation.keyFactors.map(x => <li key={x}>{x}</li>)}</ul>
-                </div>
-              </article>
-            )}
-
-            {/* Immutable Audit Timeline */}
-            <article className="panel">
-              <p className="eyebrow">IMMUTABLE AUDIT TIMELINE</p>
-              <h2>Event History</h2>
-              <div className="timeline">
-                {auditEvents.map(e => (
-                  <div key={e.eventId} className="timeline-item">
-                    <div className={`timeline-dot ${e.actorType.toLowerCase()}`} />
-                    <div className="timeline-content">
-                      <div className="timeline-meta">
-                        <span className={`actor-badge ${e.actorType.toLowerCase()}`}>{e.actorType}: {e.actorId}</span>
-                        <span>{new Date(e.createdAt).toLocaleTimeString('en-IN')}</span>
-                      </div>
-                      <strong style={{ display: 'block', fontSize: '12px', color: '#1e293b' }}>
-                        {e.eventType.replaceAll('_', ' ')}
-                      </strong>
-                      <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#475569' }}>
-                        {e.description}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </article>
-          </>
         )}
       </div>
 
-      {/* Approve Modal */}
-      {showApproveModal && detail && (
-        <ApproveModal
-          detail={detail}
-          onConfirm={handleApprove}
-          onCancel={() => setShowApproveModal(false)}
-        />
-      )}
+      {detail && (
+        <div className="drawer-overlay" onClick={() => setSelectedId(null)}>
+          <div className="drawer" onClick={e => e.stopPropagation()}>
+            <div className="card-header">
+              <h2>Decision Detail: <code>{detail.decisionId}</code></h2>
+              <button className="icon-button" onClick={() => setSelectedId(null)}><X size={18} /></button>
+            </div>
 
-      {/* Reject Modal */}
-      {showRejectModal && (
-        <RejectModal
-          onConfirm={handleReject}
-          onCancel={() => setShowRejectModal(false)}
-        />
-      )}
-    </div>
-  )
-}
+            <StatusBadge value={detail.status} />
 
-function ApproveModal({
-  detail,
-  onConfirm,
-  onCancel
-}: {
-  detail: DecisionDetail
-  onConfirm: () => void
-  onCancel: () => void
-}) {
-  return (
-    <div className="modal-backdrop" onClick={onCancel}>
-      <div className="modal-card" onClick={e => e.stopPropagation()}>
-        <div className="modal-header">
-          <h3>Approve Financial Action?</h3>
-          <button className="modal-close" onClick={onCancel}><X size={20} /></button>
-        </div>
-        <div className="modal-body">
-          <p style={{ color: '#475569', fontSize: '14px', marginBottom: '16px' }}>
-            You are approving human governance for this pending action:
-          </p>
-          <dl>
-            <div><dt>Action</dt><dd>{detail.intent.actionType}</dd></div>
-            <div><dt>Amount</dt><dd>{money(detail.intent.amount)}</dd></div>
-            <div><dt>Target</dt><dd>{detail.intent.target ?? 'Not specified'}</dd></div>
-            <div><dt>Policy Reason</dt><dd style={{ fontWeight: 400 }}>{detail.policy.reason}</dd></div>
-          </dl>
-          <div className="notice clarification" style={{ marginTop: '16px', fontSize: '12px' }}>
-            <AlertTriangle size={16} />
-            <p><strong>Note:</strong> Approving records human governance approval. <strong>No payment or money movement is executed.</strong></p>
+            <div style={{ background: 'var(--panel-light)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border)' }}>
+              <p className="eyebrow">ORIGINAL INTENT PROMPT</p>
+              <p style={{ fontSize: '0.95rem', fontStyle: 'italic', margin: '0.25rem 0' }}>"{detail.originalMessage}"</p>
+              <p style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>
+                Action: {detail.intent.actionType} | Amount: {money(detail.intent.amount)} | Target: {detail.intent.target || 'N/A'}
+              </p>
+            </div>
+
+            <div style={{ background: 'var(--panel-light)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border)' }}>
+              <h3 style={{ fontSize: '0.9rem', marginBottom: '0.5rem', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.4rem' }}>
+                <Zap size={16} style={{ color: 'var(--primary)' }} /> EXECUTION GATEWAY STATUS
+              </h3>
+              {execDetail ? (
+                <div>
+                  <p style={{ fontSize: '0.85rem' }}>Status: <StatusBadge value={execDetail.status} /></p>
+                  <p style={{ fontSize: '0.85rem' }}>Provider: <strong>{execDetail.provider}</strong></p>
+                  <p style={{ fontSize: '0.85rem' }}>Reference: <code>{execDetail.providerReference || 'N/A'}</code></p>
+                </div>
+              ) : (detail.status === 'SAFE' || detail.status === 'APPROVED') ? (
+                <div>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '0.75rem' }}>Eligible for controlled Razorpay TEST execution.</p>
+                  <button className="btn-execute" onClick={() => setExecModalOpen(true)}>
+                    <Zap size={16} /> Execute Test Payment
+                  </button>
+                </div>
+              ) : (
+                <p style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>Execution is denied for status: {detail.status}.</p>
+              )}
+            </div>
+
+            <div className="card-header"><h3>Audit Timeline</h3></div>
+            <div className="timeline">
+              {events.map(e => (
+                <div className="timeline-item" key={e.eventId}>
+                  <div className="timeline-dot" />
+                  <div className="timeline-content">
+                    <div className="timeline-meta">
+                      <span>{e.eventType}</span>
+                      <span>{new Date(e.createdAt).toLocaleTimeString()}</span>
+                    </div>
+                    <p style={{ fontSize: '0.85rem' }}>{e.description}</p>
+                    <span className="badge safe" style={{ marginTop: '0.35rem', fontSize: '0.65rem' }}>{e.actorType}: {e.actorId}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {execModalOpen && (
+              <ExecutionModal
+                decisionId={detail.decisionId}
+                actionType={detail.intent.actionType}
+                amount={detail.intent.amount}
+                currency={detail.intent.currency}
+                target={detail.intent.target}
+                status={detail.status}
+                onClose={() => setExecModalOpen(false)}
+                onSuccess={(res) => {
+                  setExecDetail(res)
+                  loadDecisions()
+                }}
+              />
+            )}
           </div>
         </div>
-        <div className="modal-actions">
-          <button className="btn-secondary" onClick={onCancel}>Cancel</button>
-          <button className="btn-approve" onClick={onConfirm}>Confirm Approval</button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function RejectModal({
-  onConfirm,
-  onCancel
-}: {
-  onConfirm: (comment: string) => void
-  onCancel: () => void
-}) {
-  const [comment, setComment] = useState('')
-
-  return (
-    <div className="modal-backdrop" onClick={onCancel}>
-      <div className="modal-card" onClick={e => e.stopPropagation()}>
-        <div className="modal-header">
-          <h3>Reject Financial Action</h3>
-          <button className="modal-close" onClick={onCancel}><X size={20} /></button>
-        </div>
-        <div className="modal-body">
-          <label htmlFor="reject-comment">Reason for Rejection (Required)</label>
-          <textarea
-            id="reject-comment"
-            placeholder="e.g. Rejected because liquidity should be preserved for upcoming obligations."
-            value={comment}
-            onChange={e => setComment(e.target.value)}
-          />
-        </div>
-        <div className="modal-actions">
-          <button className="btn-secondary" onClick={onCancel}>Cancel</button>
-          <button
-            className="btn-reject"
-            disabled={!comment.trim()}
-            onClick={() => onConfirm(comment.trim())}
-          >
-            Confirm Rejection
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function AuditLogPage() {
-  const [events, setEvents] = useState<AuditEvent[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-
-  useEffect(() => {
-    getAuditEvents()
-      .then(data => setEvents(data))
-      .catch(() => setError('Failed to retrieve append-only audit events.'))
-      .finally(() => setLoading(false))
-  }, [])
-
-  return (
-    <>
-      <section className="page-intro">
-        <div>
-          <h2>Append-Only Audit Log</h2>
-          <p>Immutable system, AI agent, and human governance audit timeline.</p>
-        </div>
-      </section>
-
-      {loading ? (
-        <Loading>Loading audit log events…</Loading>
-      ) : error ? (
-        <div className="notice error"><XCircle size={18} />{error}</div>
-      ) : (
-        <article className="panel full-table">
-          {events.length ? (
-            <table>
-              <thead>
-                <tr>
-                  <th>Event ID</th>
-                  <th>Decision ID</th>
-                  <th>Event Type</th>
-                  <th>Actor</th>
-                  <th>Description</th>
-                  <th>Timestamp</th>
-                </tr>
-              </thead>
-              <tbody>
-                {events.map(e => (
-                  <tr key={e.eventId}>
-                    <td><code>{e.eventId}</code></td>
-                    <td><code>{e.decisionId}</code></td>
-                    <td><b>{e.eventType.replaceAll('_', ' ')}</b></td>
-                    <td>
-                      <span className={`actor-badge ${e.actorType.toLowerCase()}`}>
-                        {e.actorType}: {e.actorId}
-                      </span>
-                    </td>
-                    <td>{e.description}</td>
-                    <td>{new Date(e.createdAt).toLocaleString('en-IN')}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <Empty title="No audit events" text="No audit records have been generated yet." />
-          )}
-        </article>
       )}
     </>
   )
 }
 
-function Placeholder({ type }: { type: string }) {
-  const copy: Record<string, [string, string]> = {
-    simulations: ['No simulation history yet', 'Run an analysis from the AI Safety Center to see financial simulations here.'],
-    customers: ['Customer intelligence will appear here when connected.', 'PayLens does not currently have a customer data source.'],
-    settings: ['System settings', 'Environment and provider status are managed by the backend.']
+function ExecutionsPage() {
+  const [executions, setExecutions] = useState<ExecutionSummary[]>([])
+  const [filter, setFilter] = useState<string>('ALL')
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [detail, setDetail] = useState<ExecutionResponse | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  const loadExecutions = () => {
+    setLoading(true)
+    getExecutions(filter === 'ALL' ? undefined : filter)
+      .then(res => setExecutions(res.executions))
+      .catch(console.error)
+      .finally(() => setLoading(false))
   }
-  return <Empty title={copy[type][0]} text={copy[type][1]} />
+
+  useEffect(() => { loadExecutions() }, [filter])
+
+  useEffect(() => {
+    if (selectedId) {
+      getExecutionDetail(selectedId).then(setDetail).catch(console.error)
+    } else {
+      setDetail(null)
+    }
+  }, [selectedId])
+
+  return (
+    <>
+      <div className="tabs">
+        {['ALL', 'SUCCEEDED', 'FAILED', 'ELIGIBILITY_REJECTED', 'UNSUPPORTED_EXECUTION', 'UNKNOWN'].map(t => (
+          <button key={t} className={`tab ${filter === t ? 'active' : ''}`} onClick={() => setFilter(t)}>
+            {t.replace(/_/g, ' ')}
+          </button>
+        ))}
+      </div>
+
+      <div className="card">
+        <div className="card-header"><h2 className="card-title">Controlled Execution Gateway History</h2></div>
+        {loading ? (
+          <Loading>Loading execution history...</Loading>
+        ) : executions.length === 0 ? (
+          <Empty title="No execution records" text="No payment executions match the selected filter." />
+        ) : (
+          <div className="table-container">
+            <table>
+              <thead>
+                <tr><th>Execution ID</th><th>Decision ID</th><th>Action</th><th>Amount</th><th>Provider</th><th>Reference</th><th>Status</th><th>Timestamp</th><th>Inspect</th></tr>
+              </thead>
+              <tbody>
+                {executions.map(e => (
+                  <tr key={e.executionId}>
+                    <td><code>{e.executionId}</code></td>
+                    <td><code>{e.decisionId}</code></td>
+                    <td>{e.actionType}</td>
+                    <td><strong>{money(e.amount)}</strong></td>
+                    <td>{e.provider}</td>
+                    <td><code>{e.providerReference || 'N/A'}</code></td>
+                    <td><StatusBadge value={e.status} /></td>
+                    <td>{new Date(e.createdAt).toLocaleTimeString()}</td>
+                    <td>
+                      <button className="btn-secondary" onClick={() => setSelectedId(e.executionId)}>Detail</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {detail && (
+        <div className="drawer-overlay" onClick={() => setSelectedId(null)}>
+          <div className="drawer" onClick={e => e.stopPropagation()}>
+            <div className="card-header">
+              <h2>Execution Detail: <code>{detail.executionId}</code></h2>
+              <button className="icon-button" onClick={() => setSelectedId(null)}><X size={18} /></button>
+            </div>
+
+            <StatusBadge value={detail.status} />
+
+            <div style={{ background: 'var(--panel-light)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border)' }}>
+              <div className="exec-details-grid">
+                <div className="exec-field"><label>Decision ID</label><span>{detail.decisionId}</span></div>
+                <div className="exec-field"><label>Idempotency Key</label><span>{detail.idempotencyKey}</span></div>
+                <div className="exec-field"><label>Provider</label><span>{detail.provider}</span></div>
+                <div className="exec-field"><label>Provider Reference</label><span>{detail.providerReference || 'N/A'}</span></div>
+                <div className="exec-field"><label>Action</label><span>{detail.actionType}</span></div>
+                <div className="exec-field"><label>Amount</label><span>{money(detail.amount)} {detail.currency}</span></div>
+                <div className="exec-field"><label>Target</label><span>{detail.target || 'N/A'}</span></div>
+                <div className="exec-field"><label>Created At</label><span>{new Date(detail.createdAt).toLocaleString()}</span></div>
+              </div>
+            </div>
+
+            {detail.failureMessage && (
+              <div style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', padding: '1rem', borderRadius: '8px', fontSize: '0.85rem' }}>
+                <strong>Failure Details ({detail.failureCode || 'ERROR'}):</strong>
+                <p style={{ marginTop: '0.25rem' }}>{detail.failureMessage}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  )
 }
 
-export default function App() {
+function AuditPage() {
+  const [events, setEvents] = useState<AuditEvent[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    getAuditEvents()
+      .then(setEvents)
+      .catch(console.error)
+      .finally(() => setLoading(false))
+  }, [])
+
+  if (loading) return <Loading>Loading append-only audit trail...</Loading>
+
+  return (
+    <div className="card">
+      <div className="card-header"><h2 className="card-title">Append-Only Immutable Audit Log</h2></div>
+      <div className="table-container">
+        <table>
+          <thead>
+            <tr><th>Event ID</th><th>Decision ID</th><th>Event Type</th><th>Actor</th><th>Description</th><th>Timestamp</th></tr>
+          </thead>
+          <tbody>
+            {events.map(e => (
+              <tr key={e.eventId}>
+                <td><code>{e.eventId}</code></td>
+                <td><code>{e.decisionId}</code></td>
+                <td><strong>{e.eventType}</strong></td>
+                <td><span className="badge safe">{e.actorType}: {e.actorId}</span></td>
+                <td>{e.description}</td>
+                <td>{new Date(e.createdAt).toLocaleString()}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+export function App() {
   return (
     <Shell>
       <Routes>
-        <Route path="/" element={<Overview />} />
-        <Route path="/safety" element={<Safety />} />
-        <Route path="/transactions" element={<Transactions />} />
+        <Route path="/" element={<OverviewPage />} />
+        <Route path="/safety" element={<SafetyPage />} />
+        <Route path="/simulations" element={<OverviewPage />} />
         <Route path="/decisions" element={<DecisionsPage />} />
-        <Route path="/audit" element={<AuditLogPage />} />
-        {['simulations', 'customers', 'settings'].map(x => (
-          <Route key={x} path={`/${x}`} element={<Placeholder type={x} />} />
-        ))}
+        <Route path="/executions" element={<ExecutionsPage />} />
+        <Route path="/audit" element={<AuditPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Shell>
   )
 }
+
+export default App

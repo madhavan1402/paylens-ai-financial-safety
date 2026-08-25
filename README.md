@@ -123,3 +123,43 @@ Phase 7 introduces persistent decision recording, human governance workflows, an
   - `POST /api/decisions/{id}/reject`: Human review rejection.
   - `GET /api/audit`: Retrieve append-only audit trail (supports optional `decisionId` query parameter).
 
+## Controlled Financial Execution Gateway (Phase 8)
+
+Phase 8 introduces a controlled financial execution gateway between PayLens governance decisions and the Razorpay TEST API, proving that an AI-generated action cannot reach payment infrastructure unless PayLens governance explicitly permits it.
+
+```text
+Decision (SAFE / APPROVED)
+           │
+           ▼
+    ExecutionService
+           │
+  (Eligibility & DB Idempotency Check)
+           │
+           ▼
+PaymentExecutionProvider (Interface)
+           │
+           ▼
+RazorpayTestExecutionProvider
+           │
+           ▼
+  Razorpay TEST API (order / payment / refund)
+```
+
+- **Server-Side Governance Validation**: The execution gateway never trusts client or AI input. It loads the persisted `DecisionRecord` and independently validates eligibility.
+- **Eligibility Rules**:
+  - `SAFE`: Eligible for execution upon explicit user confirmation in TEST mode.
+  - `APPROVED`: Eligible for execution after recorded human governance sign-off.
+  - `PENDING_REVIEW`: **DENIED** (`ELIGIBILITY_REJECTED`).
+  - `REJECTED`: **DENIED** (`ELIGIBILITY_REJECTED`).
+  - `BLOCKED`: **DENIED** (`ELIGIBILITY_REJECTED`). **BLOCKED decisions can NEVER reach payment infrastructure.**
+- **Provider Abstraction**: Business logic depends on `PaymentExecutionProvider` interface. `RazorpayTestExecutionProvider` encapsulates official Razorpay Java SDK integration for test-mode actions (`REFUND`, `VENDOR_PAYMENT`). Unsupported actions (`PAYROLL`, `TAX_PAYMENT`) return `UNSUPPORTED_EXECUTION` without fabricating payment references.
+- **Database-Level Idempotency**: `ExecutionRecord` enforces unique index constraint on `idempotencyKey`. Duplicate execution requests return the existing execution result without invoking the provider twice.
+- **Outcome Safety & Timeout Handling**: Network timeouts yield `UNKNOWN` status. Outcome `UNKNOWN` does NOT trigger an automatic retry; the UI indicates manual reconciliation is required.
+- **Credential Protection**: `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` remain strictly server-side in environment variables. Secrets are never exposed to React, API responses, logs, or source control.
+- **Execution APIs**:
+  - `POST /api/executions`: Triggers controlled execution for `decisionId` with `idempotencyKey`.
+  - `GET /api/executions`: Lists execution history (supports optional `status` filter).
+  - `GET /api/executions/{id}`: Returns complete detail of an execution record.
+  - `GET /api/decisions/{id}/execution`: Returns execution record associated with a decision.
+
+

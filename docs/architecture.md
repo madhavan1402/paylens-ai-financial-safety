@@ -100,5 +100,52 @@ Status: APPROVED | REJECTED
 - `REJECTED` (Terminal): Recorded human governance rejection.
 
 ### Audit Immutability
-Audit records (`AuditEvent`) are created by backend services during evaluation and human review events (`ACTION_ANALYZED`, `INTENT_PARSED`, `SIMULATION_COMPLETED`, `POLICY_EVALUATED`, `EXPLANATION_GENERATED`, `REVIEW_REQUESTED`, `REVIEW_APPROVED`, `REVIEW_REJECTED`, `ACTION_BLOCKED`). The audit trail is append-only with no modification or deletion endpoints.
+Audit records (`AuditEvent`) are created by backend services during evaluation, human review, and execution gateway events (`ACTION_ANALYZED`, `INTENT_PARSED`, `SIMULATION_COMPLETED`, `POLICY_EVALUATED`, `EXPLANATION_GENERATED`, `REVIEW_REQUESTED`, `REVIEW_APPROVED`, `REVIEW_REJECTED`, `ACTION_BLOCKED`, `EXECUTION_REQUESTED`, `EXECUTION_ELIGIBILITY_REJECTED`, `EXECUTION_STARTED`, `EXECUTION_SUCCEEDED`, `EXECUTION_FAILED`, `EXECUTION_DUPLICATE`, `EXECUTION_UNKNOWN`, `EXECUTION_UNSUPPORTED`). The audit trail is append-only with no modification or deletion endpoints.
+
+
+## Controlled Financial Execution Gateway Architecture (Phase 8)
+
+Phase 8 evolves PayLens from a safety & governance advisor to a controlled execution gateway.
+
+```text
+               EXECUTION REQUEST (POST /api/executions)
+                                │
+                                ▼
+                        ExecutionService
+                                │
+                  1. Load persisted DecisionRecord
+                  2. Validate Governance Status
+                  3. Enforce Idempotency Key (DB Index)
+                                │
+                 +--------------+--------------+
+                 │                             │
+             ELIGIBLE                      DENIED
+      (SAFE or APPROVED)        (PENDING_REVIEW / BLOCKED / REJECTED)
+                 │                             │
+                 ▼                             ▼
+   PaymentExecutionProvider           ELIGIBILITY_REJECTED
+   (Interface Abstraction)            (Audit log & return 422)
+                 │
+                 ▼
+   RazorpayTestExecutionProvider
+                 │
+                 ▼
+  Razorpay TEST API SDK (order / refund)
+                 │
+       +---------+---------+
+       │         │         │
+       ▼         ▼         ▼
+   SUCCEEDED   FAILED   UNKNOWN
+```
+
+### Execution State Machine
+- `REQUESTED` -> Initial execution request received.
+- `ELIGIBILITY_REJECTED` -> Terminal state for governance denial (`PENDING_REVIEW`, `REJECTED`, `BLOCKED`).
+- `PROCESSING` -> Execution submitted to provider.
+- `SUCCEEDED` -> Provider confirmed test payment execution.
+- `FAILED` -> Provider returned execution failure code/message.
+- `DUPLICATE` -> Idempotency key match returned existing execution record.
+- `UNKNOWN` -> Provider network timeout. **Requires manual reconciliation; automatic retry is disabled.**
+- `UNSUPPORTED_EXECUTION` -> Action type (e.g. `PAYROLL`, `TAX_PAYMENT`) not supported by Razorpay TEST API.
+
 
