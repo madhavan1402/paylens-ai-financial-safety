@@ -2,9 +2,9 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
-  Activity, AlertTriangle, Bell, Bot, Calendar, Check, CheckCheck, CheckCircle2,
+  Activity, AlertTriangle, Bot, Calendar, Check, CheckCheck, CheckCircle2,
   CircleDollarSign, ClipboardList, CreditCard, Gauge, Landmark, LoaderCircle,
-  Menu, Play, RefreshCw, Search, Settings, ShieldCheck, Sliders, TrendingUp, Users, WalletCards, XCircle, X, Zap, Info
+  LogOut, Menu, Play, RefreshCw, Settings, ShieldCheck, Sliders, TrendingUp, Users, WalletCards, XCircle, X, Zap, Info
 } from 'lucide-react'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { analyzeAction } from './api/agentApi'
@@ -19,6 +19,10 @@ import type {
   DecisionDetail, DecisionSummary, ExecutionResponse, ExecutionSummary, FinancialStateResponse, ForecastScenarioResponse, GovernanceStatus,
   IntelligenceSummaryResponse, MonitoringStatusResponse, ObligationRiskItem, ReconciliationSummary, ReliabilityMetrics, RiskEventResponse, RiskEventStatus, Transaction
 } from './types/api'
+import { useAuth } from './context/AuthContext'
+import { LoginPage } from './pages/LoginPage'
+import { UserManagementPage } from './pages/UserManagementPage'
+import { SecuritySettingsPage } from './pages/SecuritySettingsPage'
 import './App.css'
 
 const money = (value: number | undefined) =>
@@ -80,15 +84,21 @@ function Empty({ title, text }: { title: string; text: string }) {
 function Shell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false)
   const path = useLocation().pathname
-  const title = path === '/' ? 'Overview' : path === '/safety' ? 'AI Safety Center' : path === '/executions' ? 'Execution Gateway' : path.slice(1).replace(/^./, c => c.toUpperCase())
+  const { user, merchantName, logout, hasRole } = useAuth()
+  const title = path === '/' ? 'Overview' : path === '/safety' ? 'AI Safety Center' : path === '/executions' ? 'Execution Gateway' : path === '/users' ? 'User Management' : path.slice(1).replace(/^./, c => c.toUpperCase())
+
+  const sidebarNav = [
+    ...nav,
+    ...(hasRole(['OWNER', 'ADMIN']) ? [['USER GOVERNANCE', '', null], ['User Management', '/users', Users]] as const : [])
+  ]
 
   return (
     <div className="app-shell">
       <aside className={`sidebar ${open ? 'open' : ''}`}>
         <div className="brand"><b>P</b>PAYLENS</div>
-        <p className="brand-subtitle">Financial safety for autonomous actions.</p>
+        <p className="brand-subtitle">{merchantName}</p>
         <nav>
-          {nav.map(([name, href, Icon]) =>
+          {sidebarNav.map(([name, href, Icon]) =>
             Icon ? href === '#' ? (
               <span className="nav-disabled" key={name}><Icon size={18} />{name}</span>
             ) : (
@@ -103,13 +113,27 @@ function Shell({ children }: { children: ReactNode }) {
         <header>
           <button className="menu-button" onClick={() => setOpen(!open)} aria-label="Toggle navigation"><Menu size={20} /></button>
           <div>
-            <p className="eyebrow">PAYLENS OPERATIONS</p>
+            <p className="eyebrow">PAYLENS OPERATIONS — {merchantName.toUpperCase()}</p>
             <h1>{title}</h1>
           </div>
           <div className="top-actions">
-            <button className="search"><Search size={16} />Search or command</button>
             <span className="test-mode">Razorpay Test Mode</span>
-            <button className="icon-button" aria-label="Notifications"><Bell size={18} /></button>
+            {user && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'var(--panel-light)', padding: '0.4rem 0.75rem', borderRadius: '8px', border: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', fontSize: '0.75rem' }}>
+                  <strong style={{ color: '#f8fafc' }}>{user.displayName}</strong>
+                  <span style={{ color: '#00f2fe', fontWeight: 600, fontSize: '0.65rem' }}>{user.role.replace('_', ' ')}</span>
+                </div>
+                <button
+                  className="icon-button"
+                  onClick={logout}
+                  title="Sign Out"
+                  style={{ color: '#ef4444', background: 'rgba(239, 68, 68, 0.1)' }}
+                >
+                  <LogOut size={16} />
+                </button>
+              </div>
+            )}
           </div>
         </header>
         {children}
@@ -1316,6 +1340,25 @@ function AuditPage() {
 }
 
 export function App() {
+  const { authenticated, loading } = useAuth()
+  const location = useLocation()
+
+  if (loading) {
+    return <Loading>Authenticating user session...</Loading>
+  }
+
+  if (!authenticated && location.pathname !== '/login') {
+    return <Navigate to="/login" replace />
+  }
+
+  if (authenticated && location.pathname === '/login') {
+    return <Navigate to="/" replace />
+  }
+
+  if (location.pathname === '/login') {
+    return <LoginPage />
+  }
+
   return (
     <Shell>
       <Routes>
@@ -1329,6 +1372,9 @@ export function App() {
         <Route path="/executions" element={<ExecutionsPage />} />
         <Route path="/reconciliations" element={<ReconciliationsPage />} />
         <Route path="/audit" element={<AuditPage />} />
+        <Route path="/users" element={<UserManagementPage />} />
+        <Route path="/settings/security" element={<SecuritySettingsPage />} />
+        <Route path="/settings" element={<SecuritySettingsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Shell>
@@ -1336,3 +1382,4 @@ export function App() {
 }
 
 export default App
+

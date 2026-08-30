@@ -430,5 +430,53 @@ export interface RiskEventResponse {
   updatedAt: string;
 }
 
+export type UserRole = 'OWNER' | 'ADMIN' | 'FINANCE_MANAGER' | 'REVIEWER' | 'OPERATOR' | 'VIEWER';
+export type UserStatus = 'ACTIVE' | 'DISABLED' | 'LOCKED';
+
+export interface UserResponse {
+  userId: string;
+  merchantId: string;
+  email: string;
+  displayName: string;
+  role: UserRole;
+  status: UserStatus;
+  lastLoginAt?: string;
+  createdAt: string;
+}
+
+export interface AuthResponse {
+  accessToken: string;
+  refreshToken: string;
+  tokenType: string;
+  expiresIn: number;
+  user: UserResponse;
+  merchantName: string;
+}
+
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface RegisterRequest {
+  email: string;
+  password: string;
+  displayName: string;
+  merchantName?: string;
+}
+
+export interface CreateUserRequest {
+  email: string;
+  password: string;
+  displayName: string;
+  role: UserRole;
+}
+
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+}
+
+
 
 

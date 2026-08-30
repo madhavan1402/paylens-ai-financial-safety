@@ -229,6 +229,31 @@ Phase 11 introduces an autonomous risk-monitoring engine (`MONITOR -> DETECT CHA
   - `POST /api/risk-events/{id}/dismiss`: Dismisses a risk event with optional reason.
   - `POST /api/risk-events/{id}/resolve`: Manually resolves a risk event if backend condition has cleared.
 
+## Production Security, Identity & Multi-Role Governance (Phase 12)
+
+Phase 12 introduces a secure identity, authentication, authorization, multi-role governance, and multi-tenant merchant isolation layer.
+
+- **Core Principle**: Authentication ("Who are you?") and Authorization ("What are you allowed to do?") operate upstream of Financial Policy (`SAFE`/`REVIEW`/`BLOCK`), Governance Approval (`PENDING_REVIEW` → `APPROVED`), and Execution Eligibility. Frontend authorization checks exist for UX; backend authorization is authoritative.
+- **Authentication**: Stateless JWT access tokens (15m expiry) with server-side hashed refresh token rotation/revocation. Passwords are saved strictly as BCrypt hashes.
+- **Role-Based Access Control (RBAC)**:
+  - `OWNER`: Full merchant operations, user management, settings.
+  - `ADMIN`: Operational administration and user management.
+  - `FINANCE_MANAGER`: Financial operations, governance approvals, payment execution.
+  - `REVIEWER`: Governance review (can approve/reject `PENDING_REVIEW` decisions; **cannot execute financial actions**).
+  - `OPERATOR`: Execution operations (can execute authorized TEST payments; **cannot approve governance decisions**).
+  - `VIEWER`: Read-only access to dashboard, intelligence, risks, decisions, executions, audit logs.
+- **Security Features**:
+  - Account lockout after 5 failed login attempts (15m lock).
+  - Auth rate-limiting (10 req/min).
+  - CORS origin restriction (`http://localhost:5173`).
+  - Security headers (`X-Content-Type-Options`, `X-Frame-Options DENY`, `Referrer-Policy`).
+  - Security audit events (`LOGIN_SUCCESS`, `LOGIN_FAILURE`, `LOGOUT`, `USER_CREATED`, `USER_DISABLED`, `ROLE_CHANGED`, `ACCESS_DENIED`, `SESSION_REVOKED`).
+- **Production Limitations**:
+  - H2 is an in-memory development database; production requires a managed PostgreSQL instance.
+  - In-memory rate limiting is single-instance; production requires distributed rate limiting (e.g. Redis).
+  - Razorpay integration remains in TEST mode; real-money disbursement is disabled.
+
+
 
 
 

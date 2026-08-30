@@ -16,7 +16,14 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
-@WebMvcTest(PolicyController.class)
+import com.paylens.backend.security.JwtAuthenticationFilter;
+import com.paylens.backend.security.SecurityConfig;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
+
+@WebMvcTest(controllers = PolicyController.class, excludeFilters = @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = {SecurityConfig.class, JwtAuthenticationFilter.class}))
+@AutoConfigureMockMvc(addFilters = false)
 @Import({
         PolicyService.class, PolicyThresholds.class, SimulationService.class,
         FinancialStateService.class, InMemoryFinancialStateRepository.class

@@ -34,7 +34,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest
-@AutoConfigureMockMvc
+@AutoConfigureMockMvc(addFilters = false)
 @Import(ExecutionGatewayTest.TestConfig.class)
 @TestPropertySource(properties = {
         "spring.datasource.url=jdbc:h2:mem:exec_testdb;DB_CLOSE_DELAY=-1",

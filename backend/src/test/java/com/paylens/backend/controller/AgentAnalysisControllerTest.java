@@ -29,7 +29,14 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import static org.mockito.Mockito.mock;
 
-@WebMvcTest(AgentAnalysisController.class)
+import com.paylens.backend.security.JwtAuthenticationFilter;
+import com.paylens.backend.security.SecurityConfig;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
+
+@WebMvcTest(controllers = AgentAnalysisController.class, excludeFilters = @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = {SecurityConfig.class, JwtAuthenticationFilter.class}))
+@AutoConfigureMockMvc(addFilters = false)
 @Import({
         AgentAnalysisService.class, SimulationService.class, PolicyService.class, PolicyThresholds.class,
         FinancialStateService.class, InMemoryFinancialStateRepository.class, DeterministicExplanationService.class,

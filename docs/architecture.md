@@ -226,5 +226,33 @@ Human Governance Review / Scenario Simulator Link
 4. **Backend-Authoritative State Machine**: Client requests cannot force active financial risks to `RESOLVED` unless the underlying financial condition has cleared.
 
 
+## Production Security, Identity & Multi-Role Governance Architecture (Phase 12)
+
+Phase 12 introduces secure identity, authentication, authorization, multi-role governance, and multi-tenant merchant isolation.
+
+```text
+User
+ ↓
+Authentication (BCrypt + JWT Access Tokens & Refresh Tokens)
+ ↓
+Authorization (RBAC: OWNER, ADMIN, FINANCE_MANAGER, REVIEWER, OPERATOR, VIEWER)
+ ↓
+Financial Policy (SAFE / REVIEW / BLOCK)
+ ↓
+Governance (PENDING_REVIEW → APPROVED / REJECTED)
+ ↓
+Execution Gateway (Razorpay TEST Provider)
+ ↓
+Reconciliation (Provider State Normalization)
+```
+
+### Security & Governance Principles
+1. **Frontend Authorization is UX-Only**: Backend Spring Security rules are authoritative and return `403 FORBIDDEN` for unauthorized REST API attempts regardless of client buttons or parameters.
+2. **Authentication Does Not Bypass Safety**: Passing authentication and role checks does not bypass financial policy rules (`SAFE`/`REVIEW`/`BLOCK`), governance approval (`PENDING_REVIEW` → `APPROVED`), or Razorpay TEST execution eligibility.
+3. **Multi-Tenant Merchant Boundary**: Every authenticated user belongs to a `merchantId`. All financial records are isolated per merchant context.
+4. **Credential Protection**: Passwords are saved strictly as BCrypt hashes. Passwords, JWT tokens, and Razorpay API secrets are never logged or exposed in audit events.
+
+
+
 
 
