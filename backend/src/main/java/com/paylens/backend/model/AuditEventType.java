@@ -38,5 +38,6 @@ public enum AuditEventType {
     USER_ENABLED,
     ROLE_CHANGED,
     ACCESS_DENIED,
-    SESSION_REVOKED
+    SESSION_REVOKED,
+    COPILOT_QUERY
 }

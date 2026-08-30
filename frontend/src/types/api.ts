@@ -475,8 +475,49 @@ export interface CreateUserRequest {
 export interface ChangePasswordRequest {
   currentPassword: string;
   newPassword: string;
+}export type CopilotIntent =
+  | 'FINANCIAL_STATUS'
+  | 'ACTION_ANALYSIS'
+  | 'RISK_EXPLANATION'
+  | 'POLICY_EXPLANATION'
+  | 'FORECAST_QUERY'
+  | 'UNKNOWN'
+
+export interface CopilotRequest {
+  message: string
+  actionType?: string
+  amount?: number
 }
 
+export interface CopilotSimulation {
+  action: {
+    actionType: string
+    amount: number
+    description: string
+  }
+  before: Snapshot
+  after: Snapshot
+  impact: {
+    liquidityChange: number
+    obligationCoverageChange: number
+    safetyBufferChange: number
+    reserveBreached: boolean
+    obligationsCovered: boolean
+  }
+  consequence: string
+}
 
-
+export interface CopilotResponse {
+  intent: CopilotIntent
+  headline: string
+  explanation: string
+  keyFactors: string[]
+  financialImpact?: string
+  recommendation: string
+  requiresHumanReview: boolean
+  policyDecision?: 'SAFE' | 'REVIEW' | 'BLOCK'
+  simulation?: CopilotSimulation
+  financialHealth: FinancialHealthResponse
+  generatedAt: string
+}
 

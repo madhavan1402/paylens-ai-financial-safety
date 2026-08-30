@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import React, { useEffect, useState, type ReactNode } from 'react'
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
@@ -23,6 +23,7 @@ import { useAuth } from './context/AuthContext'
 import { LoginPage } from './pages/LoginPage'
 import { UserManagementPage } from './pages/UserManagementPage'
 import { SecuritySettingsPage } from './pages/SecuritySettingsPage'
+import { CopilotPage } from './pages/CopilotPage'
 import './App.css'
 
 const money = (value: number | undefined) =>
@@ -39,15 +40,16 @@ const labels: Record<string, string> = {
 
 const nav = [
   ['Overview', '/', Gauge],
-  ['Payments', '#', WalletCards],
+  ['Payments', '/payments', WalletCards],
   ['Transactions', '/transactions', CreditCard],
   ['Customers', '/customers', Users],
-  ['Refunds', '#', CircleDollarSign],
+  ['Refunds', '/refunds', CircleDollarSign],
   ['FINANCIAL INTELLIGENCE', '', null],
   ['Obligations', '/obligations', Calendar],
   ['Risk Center', '/risk', AlertTriangle],
   ['Scenario Simulator', '/simulator', Sliders],
   ['AI SAFETY', '', null],
+  ['AI Copilot', '/copilot', Bot],
   ['Safety Center', '/safety', ShieldCheck],
   ['Simulations', '/simulations', Landmark],
   ['Decisions', '/decisions', CheckCircle2],
@@ -85,7 +87,27 @@ function Shell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false)
   const path = useLocation().pathname
   const { user, merchantName, logout, hasRole } = useAuth()
-  const title = path === '/' ? 'Overview' : path === '/safety' ? 'AI Safety Center' : path === '/executions' ? 'Execution Gateway' : path === '/users' ? 'User Management' : path.slice(1).replace(/^./, c => c.toUpperCase())
+  const titleMap: Record<string, string> = {
+    '/': 'Overview',
+    '/payments': 'Payments',
+    '/transactions': 'Transactions',
+    '/customers': 'Customers',
+    '/refunds': 'Refund Pipeline',
+    '/obligations': 'Obligations Risk',
+    '/risk': 'Risk Center',
+    '/simulator': 'Scenario Simulator',
+    '/safety': 'AI Safety Center',
+    '/simulations': 'Simulation History',
+    '/decisions': 'Governance Decisions',
+    '/executions': 'Execution Gateway',
+    '/reconciliations': 'Reconciliation Engine',
+    '/audit': 'Audit Log',
+    '/copilot': 'AI Copilot',
+    '/users': 'User Management',
+    '/settings': 'Settings',
+    '/settings/security': 'Security Settings',
+  }
+  const title = titleMap[path] ?? path.slice(1).replace(/^./, c => c.toUpperCase())
 
   const sidebarNav = [
     ...nav,
@@ -98,15 +120,15 @@ function Shell({ children }: { children: ReactNode }) {
         <div className="brand"><b>P</b>PAYLENS</div>
         <p className="brand-subtitle">{merchantName}</p>
         <nav>
-          {sidebarNav.map(([name, href, Icon]) =>
-            Icon ? href === '#' ? (
-              <span className="nav-disabled" key={name}><Icon size={18} />{name}</span>
-            ) : (
-              <NavLink key={name} to={href} onClick={() => setOpen(false)}><Icon size={18} />{name}</NavLink>
-            ) : (
-              <span className="nav-group" key={name}>{name}</span>
+          {sidebarNav.map(([name, href, Icon]) => {
+            if (!Icon) return <span className="nav-group" key={name}>{name}</span>
+            const Ic = Icon as React.ElementType
+            return (
+              <NavLink key={name} to={href as string} onClick={() => setOpen(false)}>
+                <Ic size={18} />{name}
+              </NavLink>
             )
-          )}
+          })}
         </nav>
       </aside>
       <main>
@@ -279,14 +301,40 @@ function OverviewPage() {
   const [data, setData] = useState<DashboardResponse | null>(null)
   const [state, setState] = useState<FinancialStateResponse | null>(null)
   const [intel, setIntel] = useState<IntelligenceSummaryResponse | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    getDashboard().then(setData).catch(console.error)
-    getFinancialState().then(setState).catch(console.error)
-    getIntelligenceSummary().then(setIntel).catch(console.error)
-  }, [])
+  const loadAll = () => {
+    setLoading(true)
+    setError(null)
+    Promise.all([
+      getDashboard(),
+      getFinancialState(),
+      getIntelligenceSummary().catch(() => null),
+    ])
+      .then(([d, s, i]) => {
+        setData(d)
+        setState(s)
+        setIntel(i)
+      })
+      .catch(err => {
+        setError(err?.response?.data?.error || err?.message || 'Failed to load dashboard metrics.')
+      })
+      .finally(() => setLoading(false))
+  }
 
-  if (!data || !state) return <Loading>Loading dashboard metrics...</Loading>
+  useEffect(() => { loadAll() }, [])
+
+  if (loading) return <Loading>Loading dashboard metrics...</Loading>
+
+  if (error || !data || !state) return (
+    <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
+      <AlertTriangle size={40} style={{ color: '#ef4444', marginBottom: '1rem' }} />
+      <h2 style={{ color: '#ef4444', marginBottom: '0.5rem' }}>Unable to load dashboard</h2>
+      <p style={{ color: 'var(--muted)', marginBottom: '1.5rem' }}>{error || 'Dashboard data is unavailable.'}</p>
+      <button className="btn-primary" onClick={loadAll}>Retry</button>
+    </div>
+  )
 
   const forecastChartData = intel?.forecast.forecastDaysList.map(d => ({
     date: d.date.slice(5),
@@ -1300,18 +1348,458 @@ function ScenarioSimulatorPage() {
   )
 }
 
+/**
+ * PaymentsPage — shows transactions from the financial state engine that are
+ * payment-type (inflows). Uses the same /api/financial-state endpoint.
+ */
+function PaymentsPage() {
+  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = () => {
+    setLoading(true)
+    setError(null)
+    getFinancialState()
+      .then(res => setTransactions(res.transactions.filter(t => t.type === 'PAYMENT' || t.type === 'CREDIT' || t.type === 'INFLOW')))
+      .catch(err => setError(err?.response?.data?.error || err?.message || 'Failed to load payments.'))
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(() => { load() }, [])
+
+  if (loading) return <Loading>Loading payments...</Loading>
+
+  if (error) return (
+    <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
+      <AlertTriangle size={40} style={{ color: '#ef4444', marginBottom: '1rem' }} />
+      <h2 style={{ color: '#ef4444', marginBottom: '0.5rem' }}>Unable to load payments</h2>
+      <p style={{ color: 'var(--muted)', marginBottom: '1.5rem' }}>{error}</p>
+      <button className="btn-primary" onClick={load}>Retry</button>
+    </div>
+  )
+
+  return (
+    <>
+      <div className="card" style={{ marginBottom: '1.5rem', background: 'linear-gradient(135deg, rgba(30,41,59,0.8), rgba(15,23,42,0.95))', border: '1px solid var(--border)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <WalletCards size={22} style={{ color: 'var(--primary)' }} />
+          <div>
+            <h2 className="card-title">Payment Records</h2>
+            <p style={{ fontSize: '0.8rem', color: 'var(--muted)', margin: 0 }}>
+              All inbound payment receipts recorded in the financial state engine.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-header"><h2 className="card-title">Payment Transactions</h2></div>
+        {transactions.length === 0 ? (
+          <Empty title="No payment records" text="No inbound payment transactions have been recorded yet. Payments received through the platform will appear here." />
+        ) : (
+          <div className="table-container">
+            <table>
+              <thead>
+                <tr><th>ID</th><th>Type</th><th>Amount</th><th>Description</th><th>Status</th></tr>
+              </thead>
+              <tbody>
+                {transactions.map(t => (
+                  <tr key={t.id}>
+                    <td><code>{t.id}</code></td>
+                    <td>{t.type}</td>
+                    <td><strong>{money(t.amount)}</strong></td>
+                    <td>{t.description}</td>
+                    <td><span className="badge safe">{t.status}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <div style={{ padding: '1rem 0 0', borderTop: '1px solid var(--border)', marginTop: '1rem' }}>
+          <p style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>
+            <AlertTriangle size={14} style={{ marginRight: '0.35rem', display: 'inline-block', verticalAlign: 'middle' }} />
+            Payment execution requires the full Safety Center pipeline: Intent → Simulation → Policy → Governance → Controlled Execution.
+            Use <strong>AI Safety Center</strong> to initiate any payment action.
+          </p>
+        </div>
+      </div>
+    </>
+  )
+}
+
+/**
+ * TransactionsPage — shows all transactions from the financial state engine.
+ */
+function TransactionsPage() {
+  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = () => {
+    setLoading(true)
+    setError(null)
+    getFinancialState()
+      .then(res => setTransactions(res.transactions))
+      .catch(err => setError(err?.response?.data?.error || err?.message || 'Failed to load transactions.'))
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(() => { load() }, [])
+
+  if (loading) return <Loading>Loading transactions...</Loading>
+
+  if (error) return (
+    <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
+      <AlertTriangle size={40} style={{ color: '#ef4444', marginBottom: '1rem' }} />
+      <h2 style={{ color: '#ef4444', marginBottom: '0.5rem' }}>Unable to load transactions</h2>
+      <p style={{ color: 'var(--muted)', marginBottom: '1.5rem' }}>{error}</p>
+      <button className="btn-primary" onClick={load}>Retry</button>
+    </div>
+  )
+
+  return (
+    <>
+      <div className="card" style={{ marginBottom: '1.5rem', background: 'linear-gradient(135deg, rgba(30,41,59,0.8), rgba(15,23,42,0.95))' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <CreditCard size={22} style={{ color: 'var(--primary)' }} />
+          <div>
+            <h2 className="card-title">All Transactions</h2>
+            <p style={{ fontSize: '0.8rem', color: 'var(--muted)', margin: 0 }}>
+              Complete financial transaction ledger for this merchant account.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-header">
+          <h2 className="card-title">Transaction Ledger</h2>
+          <span className="badge" style={{ fontSize: '0.8rem' }}>{transactions.length} records</span>
+        </div>
+        {transactions.length === 0 ? (
+          <Empty title="No transactions" text="No financial transactions have been recorded yet." />
+        ) : (
+          <div className="table-container">
+            <table>
+              <thead>
+                <tr><th>ID</th><th>Type</th><th>Amount</th><th>Description</th><th>Status</th></tr>
+              </thead>
+              <tbody>
+                {transactions.map(t => (
+                  <tr key={t.id}>
+                    <td><code>{t.id}</code></td>
+                    <td><span className="badge">{t.type}</span></td>
+                    <td><strong>{money(t.amount)}</strong></td>
+                    <td>{t.description}</td>
+                    <td><span className="badge safe">{t.status}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </>
+  )
+}
+
+/**
+ * CustomersPage — shows customer-related information sourced from financial state transactions.
+ */
+function CustomersPage() {
+  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = () => {
+    setLoading(true)
+    setError(null)
+    getFinancialState()
+      .then(res => setTransactions(res.transactions))
+      .catch(err => setError(err?.response?.data?.error || err?.message || 'Failed to load customer data.'))
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(() => { load() }, [])
+
+  if (loading) return <Loading>Loading customer data...</Loading>
+
+  if (error) return (
+    <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
+      <AlertTriangle size={40} style={{ color: '#ef4444', marginBottom: '1rem' }} />
+      <h2 style={{ color: '#ef4444', marginBottom: '0.5rem' }}>Unable to load customer data</h2>
+      <p style={{ color: 'var(--muted)', marginBottom: '1.5rem' }}>{error}</p>
+      <button className="btn-primary" onClick={load}>Retry</button>
+    </div>
+  )
+
+  // Derive unique customers from transaction descriptions
+  const customers = Array.from(
+    new Set(transactions.map(t => t.description))
+  ).map((desc, i) => ({
+    id: `CUST-${String(i + 1).padStart(3, '0')}`,
+    name: desc,
+    txCount: transactions.filter(t => t.description === desc).length,
+    totalAmount: transactions.filter(t => t.description === desc).reduce((sum, t) => sum + t.amount, 0),
+  }))
+
+  return (
+    <>
+      <div className="card" style={{ marginBottom: '1.5rem', background: 'linear-gradient(135deg, rgba(30,41,59,0.8), rgba(15,23,42,0.95))' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <Users size={22} style={{ color: 'var(--primary)' }} />
+          <div>
+            <h2 className="card-title">Customer Accounts</h2>
+            <p style={{ fontSize: '0.8rem', color: 'var(--muted)', margin: 0 }}>
+              {customers.length} customer accounts derived from transaction records.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-header">
+          <h2 className="card-title">Customer Directory</h2>
+          <span className="badge">{customers.length} accounts</span>
+        </div>
+        {customers.length === 0 ? (
+          <Empty title="No customers" text="No customer accounts found. Customer records are derived from transaction history." />
+        ) : (
+          <div className="table-container">
+            <table>
+              <thead>
+                <tr><th>Customer ID</th><th>Description / Reference</th><th>Transactions</th><th>Total Volume</th></tr>
+              </thead>
+              <tbody>
+                {customers.map(c => (
+                  <tr key={c.id}>
+                    <td><code>{c.id}</code></td>
+                    <td>{c.name}</td>
+                    <td><span className="badge safe">{c.txCount}</span></td>
+                    <td><strong>{money(c.totalAmount)}</strong></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </>
+  )
+}
+
+/**
+ * RefundsPage — shows refund-type decisions from the governance pipeline.
+ * Refunds must go through: Simulation → Policy → Governance → Approval → Execution.
+ * This page shows the status and links to the Safety Center for initiating new refunds.
+ */
+function RefundsPage() {
+  const [refunds, setRefunds] = useState<DecisionSummary[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = () => {
+    setLoading(true)
+    setError(null)
+    getDecisions(undefined, 100)
+      .then(all => setRefunds(all.filter(d => d.actionType === 'REFUND')))
+      .catch(err => setError(err?.response?.data?.error || err?.message || 'Failed to load refund data.'))
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(() => { load() }, [])
+
+  if (loading) return <Loading>Loading refund pipeline...</Loading>
+
+  if (error) return (
+    <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
+      <AlertTriangle size={40} style={{ color: '#ef4444', marginBottom: '1rem' }} />
+      <h2 style={{ color: '#ef4444', marginBottom: '0.5rem' }}>Unable to load refunds</h2>
+      <p style={{ color: 'var(--muted)', marginBottom: '1.5rem' }}>{error}</p>
+      <button className="btn-primary" onClick={load}>Retry</button>
+    </div>
+  )
+
+  return (
+    <>
+      <div className="card" style={{ marginBottom: '1.5rem', background: 'linear-gradient(135deg, rgba(30,41,59,0.8), rgba(15,23,42,0.95))', borderLeft: '4px solid var(--primary)' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <CircleDollarSign size={22} style={{ color: 'var(--primary)' }} />
+            <div>
+              <h2 className="card-title">Refund Pipeline</h2>
+              <p style={{ fontSize: '0.8rem', color: 'var(--muted)', margin: 0 }}>
+                All refund actions governed by the deterministic Policy Engine and human review process.
+              </p>
+            </div>
+          </div>
+          <NavLink to="/safety" style={{ textDecoration: 'none' }}>
+            <button className="btn-primary">
+              <CircleDollarSign size={16} /> Initiate New Refund
+            </button>
+          </NavLink>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: '1.5rem', background: 'rgba(234,179,8,0.05)', border: '1px solid rgba(234,179,8,0.3)' }}>
+        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
+          <ShieldCheck size={20} style={{ color: '#eab308', flexShrink: 0, marginTop: '0.1rem' }} />
+          <div style={{ fontSize: '0.85rem' }}>
+            <strong style={{ color: '#eab308' }}>Refund Safety Protocol</strong>
+            <p style={{ margin: '0.25rem 0 0', color: 'var(--muted)' }}>
+              Every refund must pass: <strong>AI Intent Analysis → Financial Simulation → Policy Evaluation → Governance Review → Controlled Execution</strong>.
+              Direct refund execution without this pipeline is strictly prohibited.
+              To initiate a refund, use the <NavLink to="/safety" style={{ color: 'var(--primary)' }}>AI Safety Center</NavLink>.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-header">
+          <h2 className="card-title">Refund Decisions</h2>
+          <span className="badge review">{refunds.length} refund(s)</span>
+        </div>
+        {refunds.length === 0 ? (
+          <Empty title="No refund decisions" text="No refund actions have been initiated yet. Use the AI Safety Center to submit a refund request through the full governance pipeline." />
+        ) : (
+          <div className="table-container">
+            <table>
+              <thead>
+                <tr><th>Decision ID</th><th>Amount</th><th>Target</th><th>Policy</th><th>Status</th><th>Created</th></tr>
+              </thead>
+              <tbody>
+                {refunds.map(d => (
+                  <tr key={d.decisionId}>
+                    <td><code>{d.decisionId}</code></td>
+                    <td><strong>{money(d.amount)}</strong></td>
+                    <td>{d.target || 'N/A'}</td>
+                    <td><span className={`badge ${d.decision === 'SAFE' ? 'safe' : d.decision === 'REVIEW' ? 'review' : 'blocked'}`}>{d.decision}</span></td>
+                    <td><StatusBadge value={d.status} /></td>
+                    <td>{new Date(d.createdAt).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </>
+  )
+}
+
+/**
+ * SimulationsPage — shows past simulation results from the decisions log.
+ * Displays the financial simulation history (before/after states per decision).
+ */
+function SimulationsPage() {
+  const [decisions, setDecisions] = useState<DecisionSummary[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = () => {
+    setLoading(true)
+    setError(null)
+    getDecisions(undefined, 50)
+      .then(setDecisions)
+      .catch(err => setError(err?.response?.data?.error || err?.message || 'Failed to load simulation history.'))
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(() => { load() }, [])
+
+  if (loading) return <Loading>Loading simulation history...</Loading>
+
+  if (error) return (
+    <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
+      <AlertTriangle size={40} style={{ color: '#ef4444', marginBottom: '1rem' }} />
+      <h2 style={{ color: '#ef4444', marginBottom: '0.5rem' }}>Unable to load simulations</h2>
+      <p style={{ color: 'var(--muted)', marginBottom: '1.5rem' }}>{error}</p>
+      <button className="btn-primary" onClick={load}>Retry</button>
+    </div>
+  )
+
+  return (
+    <>
+      <div className="card" style={{ marginBottom: '1.5rem', background: 'linear-gradient(135deg, rgba(30,41,59,0.8), rgba(15,23,42,0.95))' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <Landmark size={22} style={{ color: 'var(--primary)' }} />
+            <div>
+              <h2 className="card-title">Consequence Simulation History</h2>
+              <p style={{ fontSize: '0.8rem', color: 'var(--muted)', margin: 0 }}>
+                Every financial action is pre-simulated against real merchant liquidity before policy evaluation.
+              </p>
+            </div>
+          </div>
+          <NavLink to="/simulator" style={{ textDecoration: 'none' }}>
+            <button className="btn-primary"><Sliders size={16} /> Open What-If Simulator</button>
+          </NavLink>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-header">
+          <h2 className="card-title">Simulated Decisions</h2>
+          <span className="badge">{decisions.length} simulation(s)</span>
+        </div>
+        {decisions.length === 0 ? (
+          <Empty title="No simulations yet" text="Simulations are automatically created when you analyze a financial action in the AI Safety Center." />
+        ) : (
+          <div className="table-container">
+            <table>
+              <thead>
+                <tr><th>Decision ID</th><th>Action Type</th><th>Amount</th><th>Target</th><th>Policy Result</th><th>Governance Status</th><th>Date</th></tr>
+              </thead>
+              <tbody>
+                {decisions.map(d => (
+                  <tr key={d.decisionId}>
+                    <td><code>{d.decisionId}</code></td>
+                    <td><span className="badge">{d.actionType}</span></td>
+                    <td><strong>{money(d.amount)}</strong></td>
+                    <td>{d.target || 'N/A'}</td>
+                    <td><span className={`badge ${d.decision === 'SAFE' ? 'safe' : d.decision === 'REVIEW' ? 'review' : 'blocked'}`}>{d.decision}</span></td>
+                    <td><StatusBadge value={d.status} /></td>
+                    <td>{new Date(d.createdAt).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </>
+  )
+}
+
 function AuditPage() {
   const [events, setEvents] = useState<AuditEvent[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
+  const load = () => {
+    setLoading(true)
+    setError(null)
     getAuditEvents()
       .then(setEvents)
-      .catch(console.error)
+      .catch(err => setError(err?.response?.data?.error || err?.message || 'Failed to load audit log.'))
       .finally(() => setLoading(false))
-  }, [])
+  }
+
+  useEffect(() => { load() }, [])
 
   if (loading) return <Loading>Loading append-only audit trail...</Loading>
+
+  if (error) return (
+    <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
+      <AlertTriangle size={40} style={{ color: '#ef4444', marginBottom: '1rem' }} />
+      <h2 style={{ color: '#ef4444', marginBottom: '0.5rem' }}>Unable to load audit log</h2>
+      <p style={{ color: 'var(--muted)', marginBottom: '1.5rem' }}>{error}</p>
+      <button className="btn-primary" onClick={load}>Retry</button>
+    </div>
+  )
 
   return (
     <div className="card">
@@ -1367,7 +1855,11 @@ export function App() {
         <Route path="/risk" element={<RiskCenterPage />} />
         <Route path="/simulator" element={<ScenarioSimulatorPage />} />
         <Route path="/safety" element={<SafetyPage />} />
-        <Route path="/simulations" element={<OverviewPage />} />
+        <Route path="/payments" element={<PaymentsPage />} />
+        <Route path="/transactions" element={<TransactionsPage />} />
+        <Route path="/customers" element={<CustomersPage />} />
+        <Route path="/refunds" element={<RefundsPage />} />
+        <Route path="/simulations" element={<SimulationsPage />} />
         <Route path="/decisions" element={<DecisionsPage />} />
         <Route path="/executions" element={<ExecutionsPage />} />
         <Route path="/reconciliations" element={<ReconciliationsPage />} />
@@ -1375,6 +1867,7 @@ export function App() {
         <Route path="/users" element={<UserManagementPage />} />
         <Route path="/settings/security" element={<SecuritySettingsPage />} />
         <Route path="/settings" element={<SecuritySettingsPage />} />
+        <Route path="/copilot" element={<CopilotPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Shell>
