@@ -1,41 +1,119 @@
 # PayLens — AI Financial Safety & Consequence Engine
 
-PayLens is a financial safety layer for AI agents and automated financial workflows. Before any future execution step, its deterministic backend establishes the merchant's financial position—balance, obligations, protected reserve, and resulting liquidity—so an AI is never the authority that calculates whether money is safe to move.
+PayLens is an AI-powered financial safety platform for merchants, AI agents, and automated financial workflows.
 
-## Phase 1 status
+Before money can move, PayLens establishes the merchant's authoritative financial position, simulates the consequences of a proposed action, evaluates deterministic financial policy, applies human governance when required, controls TEST-mode execution, reconciles provider outcomes, monitors financial risk, and exposes the complete system through a secure AI Fintech Copilot.
 
-Phase 1 provides a deterministic in-memory Financial State Engine using Java 21 and Spring Boot. It has no AI integration, payment execution, database, authentication, or risk/policy decisions.
+The core principle is:
 
-## Run the backend
+> **AI can understand, recommend, and explain financial actions — but AI is never the authority that decides whether money is safe to move or directly executes money movement.**
 
-```bash
+```text
+User / AI Request
+        │
+        ▼
+   Intent Detection
+        │
+        ▼
+ Financial State Engine
+        │
+        ▼
+ Consequence Simulation
+        │
+        ▼
+ Deterministic Policy
+        │
+        ▼
+ AI Explanation
+        │
+        ▼
+ Human Governance
+        │
+        ▼
+ Controlled TEST Execution
+        │
+        ▼
+   Reconciliation
+        │
+        ▼
+ Financial Intelligence
+        │
+        ▼
+ Autonomous Risk Monitoring
+
+ Technology Stack
+Backend
+- Java 21
+- Spring Boot
+- Spring Security
+- Spring Data JPA
+- JWT Authentication
+- BCrypt Password Hashing
+- Maven
+- H2 Development Database
+- Razorpay Java SDK
+- REST APIs
+AI Agent Layer
+- Python
+- FastAPI
+- Deterministic AI fallback
+- Structured intent extraction
+- Structured financial explanation
+Frontend
+- React
+- TypeScript
+- Vite
+- Modern fintech dashboard UI
+Run the Backend
 cd backend
 ./mvnw spring-boot:run
-```
-
 On Windows PowerShell:
-
-```powershell
 cd backend
 .\mvnw.cmd spring-boot:run
-```
-
-The server runs on `http://localhost:8080`. Run tests with `./mvnw clean test` (or `.\mvnw.cmd clean test` on Windows).
-
-## API endpoints
-
-- `GET /api/health`
-- `GET /api/financial-state`
-- `GET /api/dashboard`
-- `POST /api/simulations`
-- `POST /api/policy/evaluate`
-- `POST /api/agent/analyze`
-- `POST /api/agent/explain` (runs the same authoritative analysis flow and includes an explanation)
-- Python agent: `GET /api/health`, `POST /api/intent`, `POST /api/explain` (port 8000)
-
-Example dashboard response:
-
-```json
+The backend runs on:
+http://localhost:8080
+Run backend tests:
+./mvnw clean test
+Windows:
+.\mvnw.cmd clean test
+Run the AI Agent
+cd agents
+python -m venv .venv
+Activate the environment on Windows:
+.venv\Scripts\activate
+Install dependencies:
+pip install -r requirements.txt
+Run the FastAPI agent:
+uvicorn app.main:app --reload --port 8000
+The AI agent runs on:
+http://localhost:8000
+Run the Frontend
+cd frontend
+npm install
+npm run dev
+The frontend normally runs on:
+http://localhost:5173
+Configure the backend URL in:
+frontend/.env
+Example:
+VITE_API_BASE_URL=http://localhost:8080
+Phase 1 — Financial State Engine
+Phase 1 establishes the deterministic financial foundation of PayLens.
+The backend calculates the merchant's financial position using authoritative financial values.
+Current Balance
+        │
+        ▼
+Upcoming Obligations
+        │
+        ▼
+Protected Safety Reserve
+        │
+        ▼
+Available Liquidity
+        │
+        ▼
+Safety Buffer
+Example financial state:
 {
   "currency": "INR",
   "currentBalance": 840000,
@@ -45,215 +123,750 @@ Example dashboard response:
   "remainingAfterObligations": 220000,
   "safetyBuffer": 120000
 }
-```
-
-## AI Intent Agent
-
-Run the isolated deterministic intent agent:
-
-```bash
-cd agents
-python -m venv .venv
-.venv\Scripts\pip install -r requirements.txt
-.venv\Scripts\uvicorn app.main:app --reload --port 8000
-```
-
-`POST /api/intent` accepts `{"message":"Refund ₹2.5 lakh to Rahul"}` and returns validated structured intent. Without an AI API key, its deterministic fallback recognizes common refunds, vendor payments, payroll, tax payments, INR, lakh/lac, and k notation. Ambiguous text asks for clarification rather than guessing.
-
-`POST /api/agent/analyze` sends natural language through that agent, validates the untrusted result in Spring Boot, then returns its simulation and `SAFE`/`REVIEW`/`BLOCK` policy result. It never executes the action.
-
-## AI Consequence & Explanation Agent
-
-Phase 5 adds a downstream explanation layer. Spring Boot alone constructs the structured explanation request from the validated intent, authoritative simulation, and authoritative policy result. The FastAPI endpoint never receives client-supplied financial facts.
-
-The default provider is deterministic and works without an API key. An optional LLM provider is intentionally isolated behind a provider seam and must preserve the supplied decision and facts. Spring Boot checks the response decision; an unavailable or mismatched response falls back to its local deterministic explanation, without affecting `SAFE`, `REVIEW`, or `BLOCK`.
-
-- `BLOCK`: “Refund blocked” — insufficient funds for upcoming obligations.
-- `REVIEW`: “Human review required” — obligations are covered but the safety margin is reduced.
-- `SAFE`: “Action appears financially safe” — obligation coverage and safety margin are preserved.
-
-## Frontend command center
-
-The React/Vite frontend is a responsive PayLens operations dashboard. It reads live metrics from Spring Boot, displays financial-state transaction data, and sends natural-language actions only to `POST /api/agent/analyze`.
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-Set `VITE_API_BASE_URL=http://localhost:8080` in `frontend/.env` (see `.env.example`). Main routes are `/` (Overview), `/safety` (AI Safety Center), `/transactions`, `/simulations`, `/decisions`, `/customers`, `/audit`, and `/settings`. The UI presents authoritative simulation, policy, and explanation data only; it contains no execution capability.
-
-Example simulation request:
-
-```json
+Core APIs:
+- GET /api/health
+- GET /api/financial-state
+- GET /api/dashboard
+Phase 2 — Consequence Simulation
+PayLens can simulate the financial consequences of a proposed action without executing it.
+Example request:
 {
   "actionType": "REFUND",
   "amount": 250000,
   "description": "Customer refund"
 }
-```
+The simulation calculates:
+- Financial position before the action
+- Financial position after the action
+- Liquidity impact
+- Safety buffer impact
+- Obligation coverage
+- Neutral financial consequences
+The simulation is completely side-effect free.
+Simulation does not execute money movement.
 
-The simulation is side-effect free. It returns before/after financial snapshots, impacts, and a neutral consequence such as `OBLIGATION_SHORTFALL`; it does not execute the action or make a policy decision.
+API:
+POST /api/simulations
+Phase 3 — Deterministic Policy Engine
+The Policy Engine is the authoritative source of truth for financial safety decisions.
+AI does not determine whether an action is financially safe.
+The deterministic backend evaluates actions and returns:
+SAFE
+REVIEW
+BLOCK
+Example:
+- ₹20,000 refund → SAFE
+- ₹50,000 refund → REVIEW
+- ₹250,000 refund → BLOCK
+A typical policy flow:
+Simulation Result
+       │
+       ▼
+Can obligations be covered?
+       │
+   ┌───┴────┐
+   │        │
+  NO       YES
+   │        │
+ BLOCK      ▼
+       Safety margin preserved?
+              │
+         ┌────┴────┐
+         │         │
+        NO        YES
+         │         │
+      REVIEW      SAFE
+API:
+POST /api/policy/evaluate
+Phase 4 — AI Intent Agent
+The AI Intent Agent converts natural language into structured financial intent.
+Example:
+Refund ₹2.5 lakh to Rahul
+The agent produces validated structured information such as:
+- Action type
+- Amount
+- Currency
+- Description
+- Target information
+The deterministic fallback supports common actions including:
+- Refund
+- Vendor payment
+- Payroll
+- Tax payment
+It also understands:
+- INR
+- Lakh / Lac
+- K notation
+Ambiguous requests are not guessed.
+PayLens asks for clarification instead of inventing financial information.
 
-Policy evaluation uses the same request body and returns a deterministic policy result. A ₹20,000 refund is `SAFE`, a ₹50,000 refund is `REVIEW` because its ₹70,000 after-buffer is below the ₹100,000 required margin, and a ₹250,000 refund is `BLOCK` because it cannot cover ₹620,000 of upcoming obligations.
+AI Agent API:
+POST /api/intent
+Phase 5 — AI Consequence & Explanation Agent
+Phase 5 adds an explanation layer after deterministic analysis.
+The flow is:
+Natural Language
+       │
+       ▼
+AI Intent
+       │
+       ▼
+Validated by Spring Boot
+       │
+       ▼
+Financial Simulation
+       │
+       ▼
+Policy Decision
+       │
+       ▼
+AI Explanation
+The AI explanation receives authoritative structured facts from the backend.
+It does not receive arbitrary client-provided financial values.
+Example decisions:
+- BLOCK: Insufficient funds for upcoming obligations.
+- REVIEW: Obligations are covered, but the safety margin is reduced.
+- SAFE: Obligation coverage and safety margin are preserved.
+If an AI provider is unavailable or produces an invalid response, PayLens falls back to deterministic local explanations.
+The AI explanation layer cannot change:
+SAFE
+REVIEW
+BLOCK
+APIs:
+POST /api/agent/analyze
+POST /api/agent/explain
+Phase 6 — Fintech Command Center
+PayLens provides a React-based fintech operations dashboard.
+The frontend displays authoritative backend information including:
+- Financial health
+- Transactions
+- Payments
+- Refunds
+- Customers
+- Obligations
+- Risk signals
+- Simulations
+- Decisions
+- Executions
+- Audit history
+- AI Safety Center
+- AI Copilot
+The frontend does not independently calculate financial policy.
+The backend remains authoritative.
 
+Phase 7 — Governance, Human Review & Append-Only Audit Trail
+Phase 7 introduces persistent decisions and human governance.
+Every financial analysis is stored as a DecisionRecord.
+A decision contains:
+- Original user request
+- Structured intent
+- Simulation result
+- Policy decision
+- AI explanation
+- Governance status
+Decision states:
+SAFE
+BLOCKED
+PENDING_REVIEW
+APPROVED
+REJECTED
+State transitions:
+PENDING_REVIEW
+      │
+ ┌────┴─────┐
+ ▼          ▼
+APPROVED   REJECTED
+Rules:
+- SAFE is terminal.
+- BLOCKED is terminal.
+- PENDING_REVIEW can become APPROVED.
+- PENDING_REVIEW can become REJECTED.
+- Invalid transitions return HTTP 409 Conflict.
+- A BLOCKED decision can never be approved.
+Important:
+APPROVED means governance approval. Approval alone does not bypass execution controls.
 
-## Governance, Human Review & Append-Only Audit Trail (Phase 7)
-
-Phase 7 introduces persistent decision recording, human governance workflows, and an immutable append-only audit trail.
-
-- **Decision Persistence**: Every financial safety analysis (`POST /api/agent/analyze`) is recorded in Spring Data JPA (`DecisionRecord`). Decisions track original prompt, intent, simulation, policy results, explanation, and governance status (`SAFE`, `PENDING_REVIEW`, `APPROVED`, `REJECTED`, `BLOCKED`).
-- **State Machine Rules**:
-  - `SAFE` is terminal.
-  - `BLOCKED` is terminal.
-  - `PENDING_REVIEW` can transition to `APPROVED` or `REJECTED`.
-  - `APPROVED` and `REJECTED` are terminal.
-  - Invalid state transitions return HTTP 409 Conflict.
-- **BLOCK Protection**: A `BLOCKED` decision can NEVER be approved or rejected. Any attempt to approve/reject a non-`PENDING_REVIEW` decision returns HTTP 409 Conflict.
-- **Approval & Rejection Semantics**:
-  - `POST /api/decisions/{id}/approve`: Only `PENDING_REVIEW` decisions can be approved.
-  - `POST /api/decisions/{id}/reject`: Only `PENDING_REVIEW` decisions can be rejected (requires a non-blank comment).
-  - **IMPORTANT**: **APPROVED means human governance approval only. No financial transaction is executed in Phase 7.**
-- **Append-Only Audit Trail**: `AuditEvent` records system actions, AI intent parsing, policy evaluation, review requests, approvals, rejections, and blocks. Audit events are strictly append-only (no `PUT`, `PATCH`, or `DELETE` endpoints exist).
-- **APIs**:
-  - `GET /api/decisions`: List decisions (supports optional `status` and `limit` parameters).
-  - `GET /api/decisions/{id}`: Full decision detail with intent, simulation, policy, explanation, and governance status.
-  - `POST /api/decisions/{id}/approve`: Human review approval.
-  - `POST /api/decisions/{id}/reject`: Human review rejection.
-  - `GET /api/audit`: Retrieve append-only audit trail (supports optional `decisionId` query parameter).
-
-## Controlled Financial Execution Gateway (Phase 8)
-
-Phase 8 introduces a controlled financial execution gateway between PayLens governance decisions and the Razorpay TEST API, proving that an AI-generated action cannot reach payment infrastructure unless PayLens governance explicitly permits it.
-
-```text
+Append-Only Audit Trail
+Audit events record important system activity.
+Examples:
+ACTION_ANALYZED
+POLICY_EVALUATED
+REVIEW_REQUESTED
+REVIEW_APPROVED
+REVIEW_REJECTED
+ACTION_BLOCKED
+Audit records are append-only.
+There are no update or delete APIs for audit history.
+APIs:
+- GET /api/decisions
+- GET /api/decisions/{id}
+- POST /api/decisions/{id}/approve
+- POST /api/decisions/{id}/reject
+- GET /api/audit
+Phase 8 — Controlled Financial Execution Gateway
+Phase 8 introduces controlled execution through Razorpay TEST mode.
+Architecture:
 Decision (SAFE / APPROVED)
            │
            ▼
     ExecutionService
            │
-  (Eligibility & DB Idempotency Check)
+           ▼
+Eligibility Validation
            │
            ▼
-PaymentExecutionProvider (Interface)
+Idempotency Validation
            │
            ▼
-RazorpayTestExecutionProvider
+PaymentExecutionProvider
            │
            ▼
-  Razorpay TEST API (order / payment / refund)
-```
+Razorpay TEST Provider
+           │
+           ▼
+     Razorpay TEST API
+The execution service never trusts client or AI input.
+It independently loads the persisted DecisionRecord.
+Eligibility Rules
+SAFE
+   │
+   └── Eligible after explicit user confirmation
 
-- **Server-Side Governance Validation**: The execution gateway never trusts client or AI input. It loads the persisted `DecisionRecord` and independently validates eligibility.
-- **Eligibility Rules**:
-  - `SAFE`: Eligible for execution upon explicit user confirmation in TEST mode.
-  - `APPROVED`: Eligible for execution after recorded human governance sign-off.
-  - `PENDING_REVIEW`: **DENIED** (`ELIGIBILITY_REJECTED`).
-  - `REJECTED`: **DENIED** (`ELIGIBILITY_REJECTED`).
-  - `BLOCKED`: **DENIED** (`ELIGIBILITY_REJECTED`). **BLOCKED decisions can NEVER reach payment infrastructure.**
-- **Provider Abstraction**: Business logic depends on `PaymentExecutionProvider` interface. `RazorpayTestExecutionProvider` encapsulates official Razorpay Java SDK integration for test-mode actions (`REFUND`, `VENDOR_PAYMENT`). Unsupported actions (`PAYROLL`, `TAX_PAYMENT`) return `UNSUPPORTED_EXECUTION` without fabricating payment references.
-- **Database-Level Idempotency**: `ExecutionRecord` enforces unique index constraint on `idempotencyKey`. Duplicate execution requests return the existing execution result without invoking the provider twice.
-- **Outcome Safety & Timeout Handling**: Network timeouts yield `UNKNOWN` status. Outcome `UNKNOWN` does NOT trigger an automatic retry; the UI indicates manual reconciliation is required.
-- **Credential Protection**: `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` remain strictly server-side in environment variables. Secrets are never exposed to React, API responses, logs, or source control.
-- **Execution APIs**:
-  - `POST /api/executions`: Triggers controlled execution for `decisionId` with `idempotencyKey`.
-  - `GET /api/executions`: Lists execution history (supports optional `status` filter).
-  - `GET /api/executions/{id}`: Returns complete detail of an execution record.
-  - `GET /api/decisions/{id}/execution`: Returns execution record associated with a decision.
+APPROVED
+   │
+   └── Eligible after human governance approval
 
-## Reconciliation & Reliability Engine (Phase 9)
+PENDING_REVIEW
+   │
+   └── DENIED
 
-Phase 9 implements a real-world financial execution reconciliation and reliability layer to safely answer: *"PayLens requested an execution from the provider. What actually happened?"*
+REJECTED
+   │
+   └── DENIED
 
-```text
-               EXECUTION GATEWAY (STATUS: UNKNOWN)
-                                │
-                                ▼
-                       ReconciliationService
-                                │
-                 1. Load persisted ExecutionRecord
-                 2. Query Razorpay TEST Status API
-                 3. Normalize Provider Outcome
-                                │
-         +----------------------+----------------------+
-         │                      │                      │
- CONFIRMED_SUCCESS      CONFIRMED_FAILURE          NOT_FOUND /
-   (Status: SUCCEEDED)    (Status: FAILED)          STILL_PROCESSING
-         │                      │                      │
-         ▼                      ▼                      ▼
-  Reconciliation:        Reconciliation:        Reconciliation:
-    CONFIRMED              FAILED             MANUAL_REVIEW_REQUIRED
-```
+BLOCKED
+   │
+   └── DENIED
+A BLOCKED decision can never reach payment infrastructure.
+Idempotency
+ExecutionRecord uses an idempotency key.
+Duplicate execution requests return the existing result instead of executing the provider twice.
+Timeout Safety
+Network uncertainty produces:
+UNKNOWN
+UNKNOWN does not automatically trigger another financial execution.
+Manual reconciliation is required.
+Provider Support
+The provider abstraction supports controlled TEST-mode execution.
+Unsupported actions return:
+UNSUPPORTED_EXECUTION
+PayLens never fabricates payment references.
+Execution APIs:
+- POST /api/executions
+- GET /api/executions
+- GET /api/executions/{id}
+- GET /api/decisions/{id}/execution
+Phase 9 — Reconciliation & Reliability Engine
+Phase 9 answers a critical financial question:
+PayLens requested an execution. What actually happened at the provider?
 
-- **UNKNOWN ≠ FAILED**: PayLens never assumes a network timeout means payment failure. `UNKNOWN` status is never automatically converted to `FAILED`.
-- **Zero Automatic Financial Retries**: `UNKNOWN` outcomes **never** trigger an automatic re-execution of the financial action. PayLens reconciles provider state first.
-- **Provider Outcome Normalization**:
-  - `CONFIRMED_SUCCESS` -> Execution status updated to `SUCCEEDED`, reconciliation `CONFIRMED`.
-  - `CONFIRMED_FAILURE` -> Execution status updated to `FAILED`, reconciliation `FAILED`.
-  - `STILL_PROCESSING` -> Reconciliation status `PENDING`.
-  - `NOT_FOUND` -> Preserved as `NOT_FOUND` provider outcome; reconciliation transitions to `MANUAL_REVIEW_REQUIRED`.
-  - `UNKNOWN` -> Reconciliation transitions to `MANUAL_REVIEW_REQUIRED`.
-- **Reconciliation Idempotency & Concurrency**: Duplicate or concurrent reconciliation requests for an execution ID do not make redundant provider API calls.
-- **Reliability Metrics**: Calculates resolved success rate `(confirmedSuccess / (confirmedSuccess + confirmedFailure))`, explicitly excluding unresolved `UNKNOWN` or `PENDING` states.
-- **Reconciliation APIs**:
-  - `POST /api/executions/{id}/reconcile`: Triggers server-side provider status reconciliation.
-  - `GET /api/executions/{id}/reconciliation`: Returns latest reconciliation record.
-  - `GET /api/reconciliations`: Lists reconciliation history with optional filters.
-  - `GET /api/reconciliations/{id}`: Returns complete reconciliation detail.
-  - `GET /api/reconciliations/metrics`: Returns system execution reliability metrics.
-
-## Real-Time Financial Intelligence Engine (Phase 10)
-
-Phase 10 transforms PayLens from a reactive financial action analyzer into a proactive financial intelligence platform.
-
-- **Financial Health Score (0-100)**: Authoritative score calculated from `safetyBuffer`, `availableLiquidity`, and execution reliability penalties.
-- **7-Day Liquidity Forecast**: Daily balance and safety buffer projections reusing Phase 2 deterministic formulas.
-- **Scenario What-If Simulator**: Evaluates proposed action impact using `SimulationService` without mutating backend state.
-
-## Autonomous Risk Monitoring Engine (Phase 11)
-
-Phase 11 introduces an autonomous risk-monitoring engine (`MONITOR -> DETECT CHANGE -> PRIORITIZE -> EXPLAIN -> ALERT -> RECOMMEND`).
-
-- **Safety Guarantee**: PayLens autonomously detects, prioritizes, and explains financial risks, but **never automatically executes financial actions, approves governance decisions, or mutates state**.
-- **Change Detection & Deduplication**: Captures `RiskSnapshot` states to compute actual deltas (safety buffer drop, health status degradation, forecast breach). Deduplicates alerts via stable fingerprints (`riskSignalType:entityType:entityId`) to prevent alert spam.
-- **Automatic Risk Resolution**: Automatically transitions open risk events to `RESOLVED` when underlying financial conditions clear.
-- **Risk Event State Machine**: `OPEN` → `ACKNOWLEDGED` → `RESOLVED` or `DISMISSED`. Manual resolution validates backend conditions first (returns HTTP 409 Conflict if condition remains active).
-- **Scheduled & Manual Monitoring**: Operates on a 5-minute Spring `@Scheduled` background cycle and `POST /api/risk-monitoring/run` manual trigger.
-- **Risk Monitoring APIs**:
-  - `POST /api/risk-monitoring/run`: Executes a single monitoring cycle.
-  - `GET /api/risk-monitoring/status`: Returns monitoring status and telemetry metrics.
-  - `GET /api/risk-events`: Retrieves filtered risk events (`status`, `severity`, `type`).
-  - `GET /api/risk-events/{id}`: Returns complete risk event detail.
-  - `POST /api/risk-events/{id}/acknowledge`: Acknowledges an open risk event.
-  - `POST /api/risk-events/{id}/dismiss`: Dismisses a risk event with optional reason.
-  - `POST /api/risk-events/{id}/resolve`: Manually resolves a risk event if backend condition has cleared.
-
-## Production Security, Identity & Multi-Role Governance (Phase 12)
-
-Phase 12 introduces a secure identity, authentication, authorization, multi-role governance, and multi-tenant merchant isolation layer.
-
-- **Core Principle**: Authentication ("Who are you?") and Authorization ("What are you allowed to do?") operate upstream of Financial Policy (`SAFE`/`REVIEW`/`BLOCK`), Governance Approval (`PENDING_REVIEW` → `APPROVED`), and Execution Eligibility. Frontend authorization checks exist for UX; backend authorization is authoritative.
-- **Authentication**: Stateless JWT access tokens (15m expiry) with server-side hashed refresh token rotation/revocation. Passwords are saved strictly as BCrypt hashes.
-- **Role-Based Access Control (RBAC)**:
-  - `OWNER`: Full merchant operations, user management, settings.
-  - `ADMIN`: Operational administration and user management.
-  - `FINANCE_MANAGER`: Financial operations, governance approvals, payment execution.
-  - `REVIEWER`: Governance review (can approve/reject `PENDING_REVIEW` decisions; **cannot execute financial actions**).
-  - `OPERATOR`: Execution operations (can execute authorized TEST payments; **cannot approve governance decisions**).
-  - `VIEWER`: Read-only access to dashboard, intelligence, risks, decisions, executions, audit logs.
-- **Security Features**:
-  - Account lockout after 5 failed login attempts (15m lock).
-  - Auth rate-limiting (10 req/min).
-  - CORS origin restriction (`http://localhost:5173`).
-  - Security headers (`X-Content-Type-Options`, `X-Frame-Options DENY`, `Referrer-Policy`).
-  - Security audit events (`LOGIN_SUCCESS`, `LOGIN_FAILURE`, `LOGOUT`, `USER_CREATED`, `USER_DISABLED`, `ROLE_CHANGED`, `ACCESS_DENIED`, `SESSION_REVOKED`).
-- **Production Limitations**:
-  - H2 is an in-memory development database; production requires a managed PostgreSQL instance.
-  - In-memory rate limiting is single-instance; production requires distributed rate limiting (e.g. Redis).
-  - Razorpay integration remains in TEST mode; real-money disbursement is disabled.
+Architecture:
+EXECUTION
+   │
+   ▼
+Provider Response
+   │
+   ▼
+Execution Status
+   │
+   ▼
+ReconciliationService
+   │
+   ▼
+Provider Status Check
+   │
+   ▼
+Normalized Outcome
+Possible outcomes:
+CONFIRMED_SUCCESS
+CONFIRMED_FAILURE
+STILL_PROCESSING
+NOT_FOUND
+UNKNOWN
+Normalization:
+CONFIRMED_SUCCESS
+        │
+        ▼
+Execution → SUCCEEDED
+Reconciliation → CONFIRMED
 
 
+CONFIRMED_FAILURE
+        │
+        ▼
+Execution → FAILED
+Reconciliation → FAILED
 
 
+STILL_PROCESSING
+        │
+        ▼
+Reconciliation → PENDING
 
+
+NOT_FOUND / UNKNOWN
+        │
+        ▼
+MANUAL_REVIEW_REQUIRED
+Important principle:
+UNKNOWN does not mean FAILED.
+
+PayLens never automatically retries uncertain financial executions.
+It reconciles provider state first.
+Reliability Metrics
+PayLens calculates resolved execution reliability:
+confirmedSuccess
+────────────────────────────────
+confirmedSuccess + confirmedFailure
+Unresolved UNKNOWN and PENDING outcomes are excluded.
+APIs:
+- POST /api/executions/{id}/reconcile
+- GET /api/executions/{id}/reconciliation
+- GET /api/reconciliations
+- GET /api/reconciliations/{id}
+- GET /api/reconciliations/metrics
+Phase 10 — Real-Time Financial Intelligence
+Phase 10 transforms PayLens from a reactive analyzer into a proactive financial intelligence platform.
+PayLens continuously evaluates financial health.
+Transactions
+      │
+      ▼
+Financial Events
+      │
+      ▼
+Financial State
+      │
+      ▼
+Financial Intelligence
+      │
+      ▼
+Risk Signals
+Features include:
+Financial Health Score
+A deterministic score from 0–100 based on factors such as:
+- Safety buffer
+- Available liquidity
+- Financial pressure
+- Execution reliability
+7-Day Liquidity Forecast
+PayLens projects:
+- Daily balances
+- Upcoming financial pressure
+- Projected safety buffers
+- Forecast breaches
+Scenario What-If Simulator
+Users can test hypothetical financial actions without mutating the backend state.
+Examples:
+What happens if I refund ₹2,00,000?
+
+What happens if vendor payment increases?
+
+What happens if multiple obligations occur together?
+All calculations reuse the authoritative deterministic financial logic.
+Phase 11 — Autonomous Risk Monitoring
+Phase 11 introduces autonomous financial risk monitoring.
+Architecture:
+MONITOR
+   │
+   ▼
+DETECT CHANGE
+   │
+   ▼
+PRIORITIZE
+   │
+   ▼
+EXPLAIN
+   │
+   ▼
+ALERT
+   │
+   ▼
+RECOMMEND
+PayLens can proactively detect financial risk instead of waiting for the user to ask.
+Examples:
+⚠ Projected safety buffer will fall below threshold.
+
+🔴 Multiple large obligations are approaching.
+
+🟡 Failed-payment trends have increased.
+
+⚠ Financial health has degraded.
+Safety Guarantee
+Autonomous monitoring can:
+- Detect risk
+- Prioritize risk
+- Explain risk
+- Create alerts
+- Recommend actions
+It cannot:
+- Execute financial actions
+- Approve governance decisions
+- Override policy
+- Move money automatically
+Risk Change Detection
+PayLens stores RiskSnapshot states and compares changes over time.
+It can detect:
+- Safety buffer drops
+- Health degradation
+- Forecast breaches
+- Financial pressure changes
+Alert Deduplication
+Risk events use stable fingerprints:
+riskSignalType:entityType:entityId
+This prevents duplicate alert spam.
+Risk Event State Machine
+OPEN
+ │
+ ▼
+ACKNOWLEDGED
+ │
+ ├──────────────► RESOLVED
+ │
+ └──────────────► DISMISSED
+Automatic resolution occurs when the underlying risk condition clears.
+Manual resolution validates backend conditions first.
+If the risk still exists:
+HTTP 409 Conflict
+Monitoring Modes
+PayLens supports:
+- Scheduled monitoring every 5 minutes
+- Manual monitoring trigger
+APIs:
+- POST /api/risk-monitoring/run
+- GET /api/risk-monitoring/status
+- GET /api/risk-events
+- GET /api/risk-events/{id}
+- POST /api/risk-events/{id}/acknowledge
+- POST /api/risk-events/{id}/dismiss
+- POST /api/risk-events/{id}/resolve
+Phase 12 — Production Security, Identity & Multi-Role Governance
+Phase 12 adds authentication, authorization, merchant isolation, and production-oriented security controls.
+Core principle:
+Authentication and authorization happen before financial policy, governance approval, and execution eligibility.
+
+User
+ │
+ ▼
+Authentication
+ │
+ ▼
+Authorization
+ │
+ ▼
+Merchant Isolation
+ │
+ ▼
+Financial Policy
+ │
+ ▼
+Governance
+ │
+ ▼
+Execution Eligibility
+Authentication
+PayLens uses:
+- JWT access tokens
+- 15-minute access token expiry
+- Refresh token rotation
+- Refresh token revocation
+- BCrypt password hashing
+Passwords are never stored in plaintext.
+Account Protection
+Security features include:
+- Account lockout after 5 failed login attempts
+- 15-minute account lock period
+- Login failure persistence
+- Security audit logging
+- Authentication rate limiting
+Role-Based Access Control
+Supported roles:
+OWNER
+Full merchant operations and administration.
+ADMIN
+Operational administration and user management.
+FINANCE_MANAGER
+Can perform financial operations and governance actions.
+REVIEWER
+Can approve or reject governance decisions.
+Cannot execute financial actions.
+OPERATOR
+Can execute authorized TEST-mode financial actions.
+Cannot approve governance decisions.
+VIEWER
+Read-only access to:
+- Dashboard
+- Financial intelligence
+- Risks
+- Decisions
+- Executions
+- Audit history
+Security Controls
+- JWT authentication
+- BCrypt passwords
+- Account lockout
+- Authentication rate limiting
+- Restricted CORS
+- Security headers
+- Merchant isolation
+- RBAC authorization
+- Security audit events
+Security audit examples:
+LOGIN_SUCCESS
+LOGIN_FAILURE
+LOGOUT
+USER_CREATED
+USER_DISABLED
+ROLE_CHANGED
+ACCESS_DENIED
+SESSION_REVOKED
+Phase 13 — Final AI Fintech Copilot
+Phase 13 combines the PayLens architecture into a single secure AI Fintech Copilot.
+Instead of a generic chatbot, the Copilot orchestrates the existing PayLens financial safety system.
+The Copilot flow:
+User Question
+      │
+      ▼
+Copilot Intent
+      │
+      ▼
+Financial State
+      │
+      ▼
+Simulation
+      │
+      ▼
+Policy Evaluation
+      │
+      ▼
+Risk / Governance Context
+      │
+      ▼
+Structured Explanation
+      │
+      ▼
+Copilot Response
+Example user request:
+Can I refund ₹80,000?
+The Copilot can explain:
+Decision: SAFE
+
+Current Liquidity: ₹8.4L
+After Action: ₹7.6L
+Safety Buffer: ₹4.5L
+
+Policy Result:
+SAFE
+
+Execution:
+Available only through the controlled TEST execution flow.
+Copilot Intent Categories
+The Copilot supports six intent categories for financial intelligence and safety queries.
+It can route requests to the appropriate deterministic PayLens capabilities instead of inventing financial answers.
+Structured Responses
+The Copilot returns structured responses containing financial context such as:
+- User intent
+- Financial situation
+- Simulation result
+- Policy decision
+- Explanation
+- Recommended next step
+Core Safety Guarantee
+The Copilot is read-only.
+It does not call ExecutionService.
+It cannot:
+❌ Approve a governance decision
+❌ Override SAFE / REVIEW / BLOCK
+❌ Execute a payment
+❌ Move money
+❌ Bypass human governance
+❌ Bypass Razorpay execution controls
+The Copilot can:
+✅ Understand the request
+✅ Retrieve financial context
+✅ Run deterministic analysis
+✅ Explain consequences
+✅ Explain policy decisions
+✅ Recommend the next safe step
+Deterministic Policy Remains Authoritative
+The Copilot never decides whether an action is financially safe.
+The authoritative source remains:
+Deterministic Policy Engine
+The Copilot explains the result.
+Policy Engine → Decision
+Copilot → Explanation
+Copilot Audit Trail
+Every Copilot query creates an audit event:
+COPILOT_QUERY
+This ensures AI interactions remain traceable.
+Security
+Copilot queries require JWT authentication.
+API:
+POST /api/copilot/query
+Complete Security Architecture
+                USER
+                  │
+                  ▼
+        JWT Authentication
+                  │
+                  ▼
+          Role Authorization
+                  │
+                  ▼
+         Merchant Isolation
+                  │
+                  ▼
+             AI Copilot
+                  │
+                  ▼
+          Intent Detection
+                  │
+                  ▼
+       Financial State Engine
+                  │
+                  ▼
+      Consequence Simulation
+                  │
+                  ▼
+     Deterministic Policy Engine
+                  │
+          ┌───────┼────────┐
+          ▼       ▼        ▼
+        SAFE    REVIEW    BLOCK
+          │       │        │
+          │       ▼        │
+          │ Human Review   │
+          │       │        │
+          │    APPROVED    │
+          │       │        │
+          └───────┼────────┘
+                  ▼
+     Controlled TEST Execution
+                  │
+                  ▼
+        Provider Reconciliation
+                  │
+                  ▼
+        Reliability Intelligence
+                  │
+                  ▼
+        Autonomous Risk Monitoring
+Frontend Command Center
+The React/Vite frontend provides a fintech operations interface for PayLens.
+Major areas include:
+Overview
+Payments
+Transactions
+Customers
+Refunds
+
+Financial Intelligence
+├── Obligations
+├── Risk Center
+└── Scenario Simulator
+
+AI Safety
+├── AI Copilot
+├── Safety Center
+├── Simulations
+├── Decisions
+└── Executions
+
+Audit
+Settings
+The frontend presents authoritative backend results.
+It does not independently determine:
+SAFE
+REVIEW
+BLOCK
+Important Safety Principles
+AI Never Has Direct Money Access
+AI
+ │
+ ▼
+Analysis / Recommendation
+ │
+ ✘
+No Direct Payment Access
+Policy Is Deterministic
+AI cannot override:
+SAFE
+REVIEW
+BLOCK
+Governance Is Enforced
+Actions requiring review must pass through human governance.
+Execution Is Controlled
+Execution happens only through the backend eligibility gateway.
+TEST Mode
+Razorpay integration remains restricted to TEST mode.
+UNKNOWN Is Not Retried Automatically
+Financial uncertainty is reconciled before any further action.
+Audit Is Append-Only
+Important system and security events remain traceable.
+Production Limitations
+The current project uses some development-oriented components.
+For full production deployment:
+- Replace H2 with managed PostgreSQL.
+- Replace in-memory rate limiting with distributed rate limiting such as Redis.
+- Store secrets in a secure secret manager.
+- Configure production HTTPS.
+- Add production observability and centralized logging.
+- Deploy with distributed monitoring infrastructure.
+Razorpay execution remains:
+TEST MODE ONLY
+Real-money autonomous execution is intentionally not enabled.
+Testing
+The complete project has been verified with backend and frontend builds.
+Backend:
+mvn clean test
+Result:
+90 tests
+0 failures
+0 errors
+BUILD SUCCESS
+Frontend:
+npm run build
+Result:
+SUCCESS
+Final Architecture Principle
+PayLens does not give AI direct control over financial infrastructure.
+Instead, it places multiple deterministic and governed layers between AI and money movement:
+AI Intelligence
+       │
+       ▼
+Financial State
+       │
+       ▼
+Simulation
+       │
+       ▼
+Deterministic Policy
+       │
+       ▼
+Human Governance
+       │
+       ▼
+Controlled Execution
+       │
+       ▼
+Reconciliation
+       │
+       ▼
+Risk Monitoring
+       │
+       ▼
+Audit & Security
+Final Statement
+PayLens doesn't give AI direct access to money. It puts financial intelligence, consequence simulation, deterministic policy, human governance, controlled execution, reconciliation, autonomous risk monitoring, and security controls between AI and financial infrastructure.
+        │
+        ▼
+   AI Fintech Copilot
